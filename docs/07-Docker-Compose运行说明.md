@@ -1,99 +1,147 @@
 # Docker Compose 运行说明
 
-## 1. 当前可运行范围
-仓库尚无 API、worker 或前端实现；当前 Compose 提供真实的检查与数据库初始化任务。
-不会启动占位 Web 服务，也不把检查容器成功退出当作新闻系统已经上线。
+## 1. 实现状态与依赖
 
-安装 Docker Engine 与 Compose 插件；Windows/macOS 使用 Docker Desktop 并启用 Linux 容器。
-检查和初始化无需在宿主机安装 Python、uv 或 Node。命令在仓库根目录执行。
-应用镜像 news-assistant:local 从官方 python:3.12-slim-bookworm 独立构建。
-应用基础镜像优先用本地缓存，缺少时构建需要获取官方镜像，或事先通过 docker load 导入。
-不使用其他项目的 backend/api 镜像作为基础，也不复用其他项目代码、依赖环境或配置。
-当前检查只用标准库，不在构建阶段额外安装 Python 包；Ruff 使用宿主机已有环境。
-.env 的 PYTHON_BASE_IMAGE 可指定另一个兼容的官方 Python 基础镜像。
+当前服务为 migrate、api、worker、frontend；check/db-init 属于 tools profile。
+应用从官方 Python 3.12 与 Node 24 镜像独立构建。
+前端运行层固定本机已有官方 Nginx 1.31.8 的 digest；没有使用其他项目应用镜像。
+SQLite 使用文件卷，不需要 MySQL/PostgreSQL/Redis 容器。
 
-“复用本地镜像”指数据库、缓存等基础设施，不是应用镜像：
-- 当前使用 SQLite 文件，无需数据库容器，也不新增 MySQL/PostgreSQL/Redis 依赖。
-- 后续若需要关系数据库，可按选型使用已有 mysql:8.4 或 postgres:15-alpine。
-- 后续若需要缓存或队列，可使用已有 redis:7.4-alpine。
-- 对新增基础设施服务设置 pull_policy: never；使用独立命名卷、网络和账号，
-  复用镜像不代表共享其他项目运行中的数据库、数据卷或凭证。
+基础设施镜像复用仅指镜像层，不共享别的项目容器、账号、端口或数据卷。
+其他机器需要准备相同镜像，或显式配置其已导入镜像的标签/digest。
+官方应用基础镜像缺少时构建会获取，build.pull=false 不代表禁止获取缺少的基础镜像。
+服务 pull_policy=never 防止误拉取同名应用镜像，应用需要先 build 或 docker load。
 
-## 2. 构建与检查
-```powershell
-docker compose config --quiet
-docker compose build
-docker compose run --rm check
-```
+真实模型和 QQ SMTP 尚未联调，不把容器健康、离线测试或 API 排队成功称为真实端到端。
+实际命令结果见[开发执行记录](development/NA-RUN-20261122-001.md)。
 
-默认服务是一次性 check；也可以使用：
-```powershell
-docker compose up --build --abort-on-container-exit --exit-code-from check
-```
+## 2. 配置与启动
 
-check 执行文档链接、数据库约束、Python 语法和配置检查，均只依赖标准库。
-Ruff 使用宿主机已有环境：uv run --locked --only-dev --no-sync ruff check scripts，
-以及 uv run --locked --only-dev --no-sync ruff format --check scripts；不触发依赖同步。
-检查的是构建时复制进镜像的代码，修改文件后必须重新 build；不会挂载整个宿主机目录。
-本项目代码位于 /opt/news-assistant，数据路径为 /app/data，镜像中不包含其他项目应用。
-容器以 UID/GID 10001 非 root 用户运行，根文件系统只读，临时文件使用 /tmp tmpfs。
-检查容器不挂载数据卷，不加载 .env，不继承模型或 QQ 邮箱凭证。
-
-## 3. 数据库初始化
-```powershell
-docker compose build db-init
-docker compose run --rm db-init
-```
-
-db-init 使用 tools profile，显式 run 时自动启用；普通 up 不会重复初始化数据库。
-SQLite 存在 Docker 命名卷 news-data 中，容器路径 /app/data/news_assistant.db。
-Compose 项目名为 news-assistant，默认实际卷名为 news-assistant_news-data；
-若通过 -p 修改项目名，会使用另一个独立卷。API 和 worker 实现后必须共享同一项目的数据卷。
-卷从镜像中权限为 app:app 的 /app/data 目录初始化，服务不需要 root 运行。
-初始化只允许新数据库；目标已存在时退出非零并明确拒绝覆盖。
-已有宿主机 data/news_assistant.db 不会自动导入命名卷，切换前需显式备份与迁移。
-
-## 4. 配置与敏感信息
-使用默认官方基础镜像时，检查和初始化不要求创建 .env。需要修改基础镜像或业务配置时复制模板：
 ```powershell
 Copy-Item .env.example .env
+# 编辑 JWT_SECRET（至少32随机字符）、ADMIN_EMAIL、ADMIN_PASSWORD（至少12字符）
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
 ```
 
-.env 已同时被 Git 与 Docker 构建上下文忽略，授权码不会随 COPY 进入镜像。
-模板使用容器内绝对路径：DATABASE_URL=sqlite:////app/data/news_assistant.db、
-AGENT_WORKSPACE_ROOT=/app/workspace。四个斜杠表示 SQLAlchemy 的绝对 SQLite 路径。
-Compose 自动读取 .env 用于变量插值，不代表变量自动进入服务容器；
-未来 API/worker 必须通过 environment 显式传入需要的字段，前端不得注入任何密钥。
-不要把 docker compose config 的完整展开结果贴入公开日志，业务服务接入后可能包含凭证。
+访问 [本地应用](http://127.0.0.1:8080)，端口通过 APP_PORT 修改。
+只监听宿主机 127.0.0.1，未公开部署；正式上线应配置域名、TLS 和受控入口。
+Compose 不向宿主机发布 API/worker 端口。
+不要把含真实 .env 的完整 docker compose config 输出贴到公开日志；使用 --quiet 校验。
 
-## 5. 后续业务部署约定（尚未实现）
-- api：后端运行镜像；健康检查；仅必要 HTTP 端口；挂载 news-data。
-- worker：与 api 同版本镜像，独立启动命令；挂载 news-data 与独立 news-workspace；
-  注入模型、搜索和 QQ SMTP 凭证；MVP 保持一个 worker。
-- frontend：Node 构建 Vue 静态产物，Nginx 等提供静态资源并将 /api 反向代理到 api；
-  浏览器不使用容器内部服务名，不直接请求模型或 SMTP。
-- migrate：一次性迁移任务，成功后再启动 api/worker；当前 db-init 仅用于全新数据库，
-  不能在每次启动时重复执行，也不能代替后续迁移。
-- 业务容器按需连接网络，使用 restart: unless-stopped、健康检查和停止宽限期；
-  一次性任务 restart: "no"。depends_on 启动顺序不能代替运行期间的失败处理。
-- SQLite 是共享文件，不需要单独“SQLite 数据库容器”；启用 WAL，限制单机本地卷。
-- Agent 文件工具仅访问 worker 的 run 工作区，不挂载 Docker socket 或宿主机仓库。
-- 不在现阶段 compose.yaml 填不存在的模块入口。业务实现时补齐镜像阶段、
-  Compose 服务与端到端验证后，统一使用 docker compose up -d --build 启动完整应用。
+migrate 使用有版本的 SQL 升级到 v2，成功后 api/worker 启动。
+Bootstrap 仅在配置完整且账号不存在时创建用户与默认订阅，不覆盖已有密码。
+管理员密码只注入迁移服务，不传入前端或模型。
+没有模型/邮箱凭证也可登录和编辑订阅；生成请求明确拒绝未配置模型，邮件状态明确失败或未配置。
+健康检查区分进程 /health 与数据库版本 /ready，不把外部 API 连通性当作进程存活条件。
 
-## 6. 停止、数据与备份
+## 3. 外部服务
+
+LLM_PROVIDER=chat_completions，填写实际 LLM_BASE_URL（包含 /v1 等前缀）、LLM_MODEL、LLM_API_KEY。
+必须支持 tools/tool_calls；系统不会自动选择付费模型或创建资源。
+修改配置后用 docker compose up -d 重新创建服务，以便读取新环境变量。
+
+RSS_SOURCES_JSON 是来源 ID 到 HTTPS URL 的映射，最多 10 个；
+search_news 在这些源中按关键词过滤，不是全网搜索。
+来源读取使用 DNS/IP 约束和内容大小限制，局域网 RSS 不在本 MVP 允许范围内。
+
+QQ 邮箱使用 smtp.qq.com:465、TLS 和 SMTP 授权码；不能填 QQ 登录密码。
+配置 SMTP_USERNAME、SMTP_AUTH_CODE 后，管理员需确认收件地址：
+- 首次 bootstrap 时填写 VERIFIED_RECIPIENT_EMAIL；或
+- 对已有账号执行：
+
 ```powershell
-docker compose ps -a
-docker compose logs check
+docker compose exec api python -m backend.app.cli verify-recipient --user-email <账号邮箱> --recipient <已核实的收件邮箱>
+```
+
+确认地址后刷新订阅页面，再开启每日推送。
+手动生成允许关闭每日推送，此时只保存网页简报，不生成邮件投递。
+同日已存在正式简报会复用；之后开启推送不自动补发这份历史简报。
+
+accepted 只是 SMTP 接受，不表示送达或阅读。unknown 不自动重发；
+页面要求先核查并明确确认可能重复发送、填写原因。
+自动重试含首次最多 MAIL_MAX_ATTEMPTS 次；达到上限后手动重试是新的明确发送请求，
+保留历史 attempt_count，不抹掉原记录。
+
+## 4. 数据与权限
+
+news-data 映射 /app/data，SQLite URL 为 sqlite:////app/data/news_assistant.db。
+news-workspace 仅给 worker 使用，文件工具根目录为 /app/workspace/run_id。
+容器 UID/GID 10001；根文件系统只读；临时文件使用 /tmp。
+生产不挂载仓库和 Docker socket，.env、数据库、本地环境、截图及测试产物不进入构建上下文。
+api/worker 共享受信任后端配置，但模型上下文不包含环境变量和 SMTP/模型密钥。
+工具子进程显式清理环境，不继承这些凭证。
+
+停止并保留卷：
+
+```powershell
 docker compose down
 ```
 
-down 默认保留命名卷；down -v 会删除数据库，不能作为普通停止命令。
-备份前停止写入或使用 SQLite 在线备份 API，不能在 WAL 活跃写入时只复制主 .db 文件。
-恢复时保持卷目录所有者 UID/GID 10001，并执行 integrity_check 与 foreign_key_check。
-首次初始化失败应检查卷权限，不能用开放目录所有权限或 root 常驻绕过问题。
+down -v 会删除数据库，不是普通停止方式。已有宿主机 data/*.db 不自动导入卷。
+备份前停止所有写入，或通过 SQLite 在线备份 API 创建一致副本；
+WAL 活跃时不能只复制主 .db 文件。恢复后执行 integrity_check、foreign_key_check 和版本检查。
+项目名称变更会使用另一组独立卷，不能误判为原数据丢失。
 
-## 7. 官方参考
-- [Compose profiles 与显式 run](https://docs.docker.com/compose/how-tos/profiles/)
-- [容器环境变量](https://docs.docker.com/compose/how-tos/environment-variables/set-environment-variables/)
-- [Compose 构建配置](https://docs.docker.com/reference/compose-file/build/)
+## 5. 检查与迁移
+
+```powershell
+docker compose --profile tools build check
+docker compose run --rm check
+docker compose run --rm --no-deps migrate
+```
+
+check 不加载真实密钥，断网执行文档/初始 DDL、Ruff、格式、mypy 和 pytest；
+测试中的模型、新闻与 SMTP 都是显式替身。
+镜像 check-dependencies 按 uv.lock 安装开发依赖，运行镜像只带运行时依赖。
+前端使用 npm ci，镜像构建执行 lint、Prettier、vue-tsc 和 Vite 生产构建。
+
+db-init 是保留的诊断工具，仅创建原始 v1 数据库，目标已存在则拒绝覆盖；
+正式运行使用 migrate，不要每次启动重复执行 db-init。
+v1 → v2 迁移保留已有用户，新增 run_articles，并记录 schema_migrations。
+已发布 001_initial.sql 保持不变；未来迁移按编号追加。
+
+## 6. 本地可重复冒烟
+
+有 uv、Node、宿主机 Chrome 时：
+
+```powershell
+uv sync --locked
+cd frontend
+npm ci
+cd ..
+uv run python scripts/browser_smoke.py
+```
+
+此脚本使用随机密码、动态本地端口及隔离数据库，启动真实 API 和 Vite，
+检查登录、订阅、排队与移动布局。worker 不启动，不访问真实模型/SMTP。
+截图和日志仅在被忽略的 artifacts、frontend/test-results 中。
+
+先构建应用镜像后：
+
+```powershell
+uv run python scripts/compose_smoke.py
+```
+
+此脚本创建随机 Compose 测试项目与动态本地端口，验证健康、登录、保存订阅、
+缺少模型时的明确错误、容器重建、删除容器后数据仍保留。
+结束时核对项目标签，只删除本次临时容器、网络和测试卷，不碰正常应用卷。
+这些步骤不代表公开上线或真实模型/QQ 邮件验收。
+
+## 7. 上线与运维
+
+服务器可按锁文件构建应用，或导入经过验证的 news-assistant:local 和 news-assistant-web:local；
+基础设施镜像也需提前准备。导入标签和 NGINX_BASE_IMAGE 的 digest/标签须一致。
+镜像与数据库备份分别迁移；为服务器重新配置密钥，不把本机 .env 加入 Git 或镜像。
+先备份和执行迁移，再升级服务；保持 API/worker 镜像版本一致。
+
+日志：docker compose logs --tail 100 api worker。不要在日志中记录原始正文、token 或授权码。
+默认生成预算 180 秒，worker 停止宽限期 6 分钟；提高预算或 SMTP 超时时相应调整宽限期。
+MVP 单 worker、SQLite 本地卷；不能把增加副本等同于已经具备高并发部署能力。
+
+## 8. 官方参考
+
+- [Compose profiles](https://docs.docker.com/compose/how-tos/profiles/)
+- [Compose environment](https://docs.docker.com/compose/how-tos/environment-variables/set-environment-variables/)
+- [Compose build](https://docs.docker.com/reference/compose-file/build/)

@@ -131,4 +131,9 @@ test("offline display fixture: escaped article, evidence label and explicit unkn
     page.getByText("邮件状态：等待发送", { exact: true }),
   ).toBeVisible();
   expect(retries).toBe(1);
+  fixture.delivery.status = "accepted";
+  await page.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(
+    page.getByText("邮件状态：邮件服务器已接受", { exact: true }),
+  ).toBeVisible();
 });

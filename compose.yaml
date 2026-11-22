@@ -1,41 +1,143 @@
 name: news-assistant
 
-x-app-build: &app-build
+x-build: &backend-build
   context: .
   dockerfile: Dockerfile
-  target: base
+  target: runtime
   pull: false
-  network: none
   args:
     PYTHON_BASE_IMAGE: ${PYTHON_BASE_IMAGE:-python:3.12-slim-bookworm}
 
+x-environment: &backend-environment
+  APP_ENV: ${APP_ENV:-production}
+  DATABASE_URL: sqlite:////app/data/news_assistant.db
+  JWT_SECRET: ${JWT_SECRET:-}
+  LLM_PROVIDER: ${LLM_PROVIDER:-chat_completions}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  LLM_MODEL: ${LLM_MODEL:-}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  SMTP_HOST: ${SMTP_HOST:-smtp.qq.com}
+  SMTP_PORT: ${SMTP_PORT:-465}
+  SMTP_USERNAME: ${SMTP_USERNAME:-}
+  SMTP_AUTH_CODE: ${SMTP_AUTH_CODE:-}
+  SMTP_FROM_NAME: ${SMTP_FROM_NAME:-AI News Assistant}
+  SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-20}
+  MAIL_MAX_ATTEMPTS: ${MAIL_MAX_ATTEMPTS:-3}
+  AGENT_MAX_MODEL_CALLS: ${AGENT_MAX_MODEL_CALLS:-15}
+  AGENT_MAX_TOOL_CALLS: ${AGENT_MAX_TOOL_CALLS:-20}
+  AGENT_MAX_SECONDS: ${AGENT_MAX_SECONDS:-180}
+  TOOL_TIMEOUT_SECONDS: ${TOOL_TIMEOUT_SECONDS:-15}
+  AGENT_WORKSPACE_ROOT: /app/workspace
+  SHELL_TOOL_ENABLED: ${SHELL_TOOL_ENABLED:-false}
+  WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-30}
+  LEASE_SECONDS: ${LEASE_SECONDS:-360}
+  RSS_SOURCES_JSON: '${RSS_SOURCES_JSON:-{"huggingface":"https://huggingface.co/blog/feed.xml","arxiv-ai":"https://rss.arxiv.org/rss/cs.AI"}}'
+
+x-service: &backend-service
+  build: *backend-build
+  image: news-assistant:local
+  pull_policy: never
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp
+  environment: *backend-environment
+  volumes:
+    - news-data:/app/data
+
 services:
+  migrate:
+    <<: *backend-service
+    command: ["python", "-m", "backend.app.cli", "migrate"]
+    environment:
+      <<: *backend-environment
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      VERIFIED_RECIPIENT_EMAIL: ${VERIFIED_RECIPIENT_EMAIL:-}
+    network_mode: none
+    restart: "no"
+
+  api:
+    <<: *backend-service
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
+  worker:
+    <<: *backend-service
+    command: ["python", "-m", "backend.app.worker.main"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - news-data:/app/data
+      - news-workspace:/app/workspace
+    restart: unless-stopped
+    stop_grace_period: 6m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import pathlib,tempfile,time,os; p=pathlib.Path(tempfile.gettempdir())/'news-worker-heartbeat'; assert time.time()-p.stat().st_mtime < int(os.getenv('AGENT_MAX_SECONDS','180'))+int(os.getenv('SMTP_TIMEOUT_SECONDS','20'))*6+int(os.getenv('WORKER_POLL_SECONDS','30'))+60"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      pull: false
+      args:
+        NODE_BASE_IMAGE: ${NODE_BASE_IMAGE:-node:24-alpine}
+        NGINX_BASE_IMAGE: ${NGINX_BASE_IMAGE:-nginx@sha256:5ab5b0b01097420873a3f3330f44248e34a3c2a3e8d5ee30658aeae8cb7435da}
+    image: news-assistant-web:local
+    pull_policy: never
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
   check:
-    build: *app-build
-    image: news-assistant:local
+    profiles: ["tools"]
+    build:
+      <<: *backend-build
+      target: check
+    image: news-assistant-check:local
     pull_policy: never
     init: true
     read_only: true
     tmpfs:
       - /tmp
     network_mode: none
-    command: ["python", "scripts/check_design.py"]
+    command: ["python", "scripts/check_all.py"]
     restart: "no"
 
   db-init:
+    <<: *backend-service
     profiles: ["tools"]
-    build: *app-build
-    image: news-assistant:local
-    pull_policy: never
-    init: true
-    read_only: true
-    tmpfs:
-      - /tmp
-    network_mode: none
-    volumes:
-      - news-data:/app/data
+    environment:
+      DATABASE_URL: sqlite:////app/data/news_assistant.db
     command: ["python", "scripts/init_db.py", "--database", "/app/data/news_assistant.db"]
+    network_mode: none
     restart: "no"
 
 volumes:
   news-data:
+  news-workspace:

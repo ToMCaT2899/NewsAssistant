@@ -21,3 +21,8 @@ workspace/*
 *.log
 .idea
 .vscode
+
+artifacts
+docs/requirements/sources
+frontend/test-results
+frontend/playwright-report

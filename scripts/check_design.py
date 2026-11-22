@@ -242,7 +242,7 @@ def check_documents() -> None:
     for script in (ROOT / "scripts").glob("*.py"):
         ast.parse(script.read_text(encoding="utf-8"), filename=str(script))
     config = (ROOT / ".env.example").read_text(encoding="utf-8")
-    for key in ("LLM_API_KEY=", "NEWS_SEARCH_API_KEY=", "SMTP_USERNAME=", "SMTP_AUTH_CODE="):
+    for key in ("LLM_API_KEY=", "SMTP_USERNAME=", "SMTP_AUTH_CODE="):
         assert key in config.splitlines(), f"Nonempty credential template: {key}"
     for relative in ("backend/app/agent/tools", "backend/app/worker", "frontend/src/views"):
         assert (ROOT / relative).is_dir(), f"Missing scaffold: {relative}"

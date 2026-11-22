@@ -1,6 +1,6 @@
 # ADR 0002：使用 Docker Compose 统一运行方式
 日期：2026-11-22
-状态：采纳；当前落地检查与数据库初始化，业务服务在后续阶段实现。
+状态：采纳；业务服务已实现，具体落地参见 ADR 0003 与开发执行记录。
 
 ## 背景
 宿主机分别安装 Python、Node 和依赖容易产生环境差异。用户要求采用 Docker Compose。
@@ -17,8 +17,7 @@ SQLite 使用命名卷，未来 api/worker 共享；工作区仅挂载给 worker
 非 root 运行，检查和初始化根文件系统只读，临时文件写入 tmpfs。
 
 ## 渐进落地
-业务不存在时不创建虚假的 api、worker、frontend 服务或空占位启动命令。
-补齐业务后再扩展同一 Compose 文件为 api + worker + frontend + migrate。
+业务实现前不创建占位服务；当前已扩展同一 Compose 文件为 api + worker + frontend + migrate。
 当前初始化器只接受新库；不把每次启动重复建库当作迁移方案。
 
 ## 代价与验证

@@ -21,8 +21,8 @@ async function load(reset = false) {
     );
     summaries.value = reset ? rows : [...summaries.value, ...rows];
     more.value = rows.length === 20;
-    if (!selected.value && summaries.value[0])
-      await select(summaries.value[0].id);
+    const selectedId = selected.value?.id ?? summaries.value[0]?.id;
+    if (selectedId) await select(selectedId);
     error.value = "";
   } catch (cause) {
     error.value = errorMessage(cause);
