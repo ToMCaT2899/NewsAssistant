@@ -54,6 +54,8 @@ SQLite 保存在 Docker 命名卷 news-data，容器路径为 /app/data/news_ass
 - [Docker Compose 运行说明](docs/07-Docker-Compose运行说明.md)
 - [Agent 与邮件架构决策](docs/adr/0001-agent与邮件可靠性.md)
 - [Docker Compose 部署决策](docs/adr/0002-Docker-Compose部署.md)
+- [开发提示词与版本溯源](docs/prompts/README.md)
+- [文字需求基线](docs/requirements/2026-11-22-需求基线.md)
 - [开发约定](AGENTS.md)
 
 ## 技术方向与后续部署
@@ -76,3 +78,9 @@ migrate 服务，统一用 `docker compose up -d --build` 启动完整系统。
 - 至少五个工具；保留 list_dir/read_file/search_content/write_file/bash，再提供新闻工具。
 - Git 保留提交历史；密钥使用环境变量；依赖锁定；提供建表/迁移脚本。
 - 运行和验收以 Docker Compose 为主要入口；原生 Python 执行只作为维护调试手段。
+
+## 开发提示词
+
+已归档 NA-DEV-001 v1.0.0，供明确启动开发时使用。本轮仅保存提示词，未执行业务实现。
+归档保留文字需求、版本记录与 SHA-256；用户原始截图不纳入 Git。
+开发提示词与未来新闻 Agent 的运行时系统提示词分别维护。

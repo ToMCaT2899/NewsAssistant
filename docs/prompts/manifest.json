@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "prompt_id": "NA-DEV-001",
+  "prompt_version": "v1.0.0",
+  "date": "2026-11-22",
+  "timezone": "Asia/Shanghai",
+  "status": "archived_not_executed",
+  "requirements_baseline": "NA-REQ-20261122-v1",
+  "design_baseline_commit": "e54c9d1a125a1af84af0651e399ebf1bffed85ad",
+  "source_images_committed": false,
+  "artifacts": [
+    {
+      "path": "docs/prompts/daily-ai-news-agent.v1.md",
+      "sha256": "d241add0ec76e8ac55afa8c55bb6cfe56333dcaaba3eedb0e271f8c27b36cb3f"
+    },
+    {
+      "path": "docs/requirements/2026-11-22-需求基线.md",
+      "sha256": "4af916488443c6d87efdda4cc4479016793df433d1252f94dbc59c8bd23e022b"
+    }
+  ]
+}
