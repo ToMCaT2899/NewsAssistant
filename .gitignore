@@ -30,3 +30,8 @@ coverage/
 Thumbs.db
 # User-provided requirement screenshots remain local
 /docs/requirements/sources/
+
+# Local test artifacts and screenshots
+/artifacts/
+/frontend/test-results/
+/frontend/playwright-report/

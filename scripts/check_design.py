@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import os
 import re
 import sqlite3
 import tempfile
@@ -212,9 +213,24 @@ def check_database() -> None:
 
 def check_documents() -> None:
     count = 0
-    for document in ROOT.rglob("*.md"):
-        if ".git" in document.parts:
-            continue
+    documents = []
+    for directory, children, files in os.walk(ROOT):
+        children[:] = [
+            name
+            for name in children
+            if name
+            not in {
+                ".git",
+                ".venv",
+                "node_modules",
+                "artifacts",
+                "dist",
+                "test-results",
+                "playwright-report",
+            }
+        ]
+        documents.extend(Path(directory) / name for name in files if name.endswith(".md"))
+    for document in documents:
         content = document.read_text(encoding="utf-8")
         assert content.count("```") % 2 == 0, f"Unclosed code fence: {document}"
         for target in re.findall(r"!?\[[^\]]*\]\(([^)]+)\)", content):
