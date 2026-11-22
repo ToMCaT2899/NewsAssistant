@@ -140,3 +140,22 @@ async def test_bad_brief_repairs_consume_original_model_budget(settings):
     result = await AgentRunner(model, Registry([]), settings, lambda _: None).run({})
     assert result["error"] == "BUDGET_EXHAUSTED"
     assert result["model_calls"] == 2
+
+
+@pytest.mark.asyncio
+async def test_usage_aggregates_only_reported_numeric_tokens(settings):
+    model = ScriptedModel(
+        [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [call("missing")],
+                "_usage": {"total_tokens": 7, "untrusted_field": "not retained"},
+            },
+            {**FINAL, "_usage": {"total_tokens": 11}},
+        ]
+    )
+    result = await AgentRunner(model, Registry([]), settings, lambda _: None).run({})
+    assert result["usage"]["reported_totals"]["total_tokens"] == 18
+    assert result["usage"]["all_calls_reported"] is True
+    assert "untrusted_field" not in json.dumps(result["usage"])

@@ -10,7 +10,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 
 from backend.app.conf.settings import Settings
-from backend.app.domain.common import AppError, identifier, now, required, stamp
+from backend.app.domain.common import AppError, identifier, now, parse_time, required, stamp
 from backend.app.domain.schemas import BriefDraft
 from backend.app.infrastructure.database import Database
 from backend.app.models.schema import (
@@ -24,7 +24,13 @@ from backend.app.models.schema import (
     Subscription,
     ToolCall,
 )
-from backend.app.repository.queries import subscription_for
+from backend.app.repository.queries import (
+    brief_for_run,
+    owned_run,
+    runs_for,
+    subscription_for,
+    tools_for,
+)
 from backend.app.service.accounts import subscription_view
 
 
@@ -177,7 +183,9 @@ def finish_run(database: Database, run_id: str, owner: str, result: dict) -> Non
             update(Run)
             .where(Run.id == run_id, Run.status == "running", Run.lease_owner == owner)
             .values(
-                status="incomplete" if error in {"BUDGET_EXHAUSTED", "INVALID_BRIEF"} else "failed",
+                status="incomplete"
+                if error in {"BUDGET_EXHAUSTED", "INVALID_BRIEF", "LEASE_LOST"}
+                else "failed",
                 model_calls=result.get("model_calls", 0),
                 tool_calls=result.get("tool_calls", 0),
                 draft_json=json.dumps(result.get("result")) if result.get("result") else None,
@@ -245,8 +253,14 @@ def publish(database: Database, run_id: str, owner: str, draft: BriefDraft, resu
                 for ref in item.sources:
                     scope = required(session.get(RunArticle, (run.id, ref.article_id)))
                     article = required(session.get(Article, ref.article_id))
-                    if scope is None or article is None:
-                        raise AppError("INVALID_SOURCE", "简报包含未授权来源")
+                    if ref.evidence_level == "full_text" and scope.evidence_level != "full_text":
+                        raise AppError("INVALID_SOURCE", "尚未取得本次原文证据")
+                    if not article.published_at or not (
+                        parse_time(run.window_start)
+                        <= parse_time(article.published_at)
+                        < parse_time(run.window_end)
+                    ):
+                        raise AppError("INVALID_SOURCE", "来源发布时间不在任务窗口内")
                     session.add(
                         ItemSource(
                             item_id=row.id,
@@ -263,6 +277,15 @@ def publish(database: Database, run_id: str, owner: str, draft: BriefDraft, resu
                         next_attempt_at=stamp(),
                     )
                 )
+        if not existing:
+            brief = required(session.get(Brief, brief_id))
+            brief.body_markdown = "\n\n".join(
+                [draft.overview]
+                + [
+                    f"## {item.headline}\n{item.summary}\n与你有关：{item.why_it_matters}"
+                    for item in draft.items
+                ]
+            )
         run.status, run.finished_at = "succeeded", stamp()
         run.model_calls, run.tool_calls = result["model_calls"], result["tool_calls"]
         run.token_usage_json = json.dumps(result.get("usage", {}))
@@ -281,3 +304,34 @@ def recover_expired(database: Database) -> None:
                 finished_at=stamp(),
             )
         )
+
+
+def list_runs(database: Database, user_id: str, limit: int, offset: int) -> list[dict]:
+    with database.session() as session:
+        return [run_view(row) for row in runs_for(session, user_id, limit, offset)]
+
+
+def get_run(database: Database, user_id: str, run_id: str) -> dict:
+    with database.session() as session:
+        run = owned_run(session, user_id, run_id)
+        brief = brief_for_run(session, run)
+        return run_view(run, brief.id if brief else None)
+
+
+def list_tool_calls(
+    database: Database, user_id: str, run_id: str, limit: int, offset: int
+) -> list[dict]:
+    with database.session() as session:
+        owned_run(session, user_id, run_id)
+        return [
+            {
+                "id": row.id,
+                "sequence": row.sequence,
+                "tool_name": row.tool_name,
+                "arguments": json.loads(row.arguments_json),
+                "status": row.status,
+                "duration_ms": row.duration_ms,
+                "error_code": row.error_code,
+            }
+            for row in tools_for(session, run_id, limit, offset)
+        ]

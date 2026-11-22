@@ -53,8 +53,8 @@ class Registry:
                     truncated = True
                     return value[:12000]
                 if isinstance(value, list):
-                    truncated = truncated or len(value) > 10
-                    return [bound(item) for item in value[:10]]
+                    truncated = truncated or len(value) > 100
+                    return [bound(item) for item in value[:100]]
                 if isinstance(value, dict):
                     return {key: bound(item) for key, item in value.items()}
                 return value

@@ -66,7 +66,31 @@ class AgentRunner:
                     self.registry.schemas(),
                     max(0.01, deadline - time.monotonic()),
                 )
-                usage = response.pop("_usage", {})
+                raw_usage = response.pop("_usage", {})
+                metrics = (
+                    {
+                        key: value
+                        for key, value in raw_usage.items()
+                        if key in {"prompt_tokens", "completion_tokens", "total_tokens"}
+                        and type(value) is int
+                        and value >= 0
+                    }
+                    if isinstance(raw_usage, dict)
+                    else {}
+                )
+                calls = [*state.get("usage", {}).get("calls", []), {"attempt": count, **metrics}]
+                totals = {
+                    key: sum(call.get(key, 0) for call in calls)
+                    for key in ("prompt_tokens", "completion_tokens", "total_tokens")
+                    if any(key in call for call in calls)
+                }
+                usage = {
+                    "calls": calls,
+                    "reported_totals": totals,
+                    "all_calls_reported": len(calls) == count
+                    and all("total_tokens" in call for call in calls),
+                }
+                progress["usage"] = usage
                 return {
                     "model_calls": count,
                     "response": response,

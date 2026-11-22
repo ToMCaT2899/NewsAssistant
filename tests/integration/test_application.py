@@ -87,6 +87,7 @@ class ResearchModel:
 
     async def complete(self, messages, tools, timeout):
         self.count += 1
+        assert "reader@example.com" not in messages[1]["content"]
         if self.count == 1:
             return {
                 "role": "assistant",
@@ -243,3 +244,23 @@ def test_v1_migration_keeps_existing_account(settings):
     with db.session() as session:
         assert session.get(User, "legacy").password_hash == "legacy-hash"
     db.close()
+
+
+@pytest.mark.asyncio
+async def test_publication_failure_preserves_actual_execution_counters(
+    database, settings, monkeypatch
+):
+    import backend.app.worker.main as worker
+
+    ticket = create_run(database, owner(database), "late-publication")
+
+    def fail_publish(*args):
+        raise AppError("LEASE_LOST", "late result")
+
+    monkeypatch.setattr(worker, "publish", fail_publish)
+    await worker.process_run(database, settings, "worker", ResearchModel(), FeedFixture())
+    with database.session() as session:
+        run = session.get(Run, ticket["run_id"])
+        assert run.status == "incomplete"
+        assert run.model_calls == 2 and run.tool_calls == 1
+        assert session.scalar(select(func.count()).select_from(Brief)) == 0

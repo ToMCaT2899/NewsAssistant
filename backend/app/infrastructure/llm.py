@@ -49,13 +49,32 @@ class ChatCompletionsClient:
                             raise AppError("MODEL_RESPONSE_TOO_LARGE", "模型响应超过限制", 503)
                 payload = json.loads(data)
                 message = payload["choices"][0]["message"]
+                content = message.get("content")
+                if content is not None and not isinstance(content, str):
+                    raise ValueError("Invalid content")
+                calls = message.get("tool_calls") or []
+                if not isinstance(calls, list) or len(calls) > 100:
+                    raise ValueError("Invalid tool call batch")
+                seen = set()
+                for call in calls:
+                    function = call["function"]
+                    if (
+                        not isinstance(call["id"], str)
+                        or not call["id"]
+                        or call["id"] in seen
+                        or call.get("type") != "function"
+                        or not isinstance(function["name"], str)
+                        or not isinstance(function["arguments"], str)
+                    ):
+                        raise ValueError("Invalid tool call protocol")
+                    seen.add(call["id"])
                 # Do not forward provider-specific hidden reasoning fields.
-                result = {"role": "assistant", "content": message.get("content")}
+                result = {"role": "assistant", "content": content}
                 if message.get("tool_calls"):
                     result["tool_calls"] = message["tool_calls"]
                 result["_usage"] = payload.get("usage", {})
                 return result
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 raise AppError("MODEL_TEMPORARY", "模型连接超时或不可用", 503) from exc
-            except (KeyError, ValueError, IndexError) as exc:
+            except (KeyError, ValueError, IndexError, TypeError, AttributeError) as exc:
                 raise AppError("MODEL_PROTOCOL_ERROR", "模型未返回有效的工具调用协议", 503) from exc

@@ -13,6 +13,12 @@ from backend.app.service.accounts import bootstrap
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
     return Settings(
+        llm_provider="chat_completions",
+        llm_base_url="",
+        llm_model="",
+        llm_api_key="",
+        smtp_username="",
+        smtp_auth_code="",
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
         jwt_secret="offline-test-signing-secret-not-for-production",
         admin_email="admin@example.com",

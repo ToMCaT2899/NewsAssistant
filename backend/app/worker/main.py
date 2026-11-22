@@ -83,6 +83,7 @@ async def process_run(
     run = claim_run(database, owner, settings)
     if run is None:
         return False
+    result: dict = {}
     try:
         news = NewsTools(database, run, settings, reader)
         files = FileTools(settings.agent_workspace_root / run.id, settings.shell_tool_enabled)
@@ -93,12 +94,27 @@ async def process_run(
             news.validate_sources,
             lambda event: audit_tool(database, run.id, event),
         )
-        result = await runner.run(
-            {
-                "subscription": json.loads(run.snapshot_json),
-                **news.available(),
-                "business_date": run.business_date,
-            }
+        snapshot = json.loads(run.snapshot_json)
+        preferences = {
+            key: snapshot[key]
+            for key in (
+                "persona",
+                "topics",
+                "include_keywords",
+                "exclude_keywords",
+                "max_items",
+                "lookback_hours",
+                "timezone",
+            )
+        }
+        result = dict(
+            await runner.run(
+                {
+                    "subscription": preferences,
+                    **news.available(),
+                    "business_date": run.business_date,
+                }
+            )
         )
         if result.get("result") and not result.get("error"):
             publish(
@@ -107,11 +123,11 @@ async def process_run(
         else:
             finish_run(database, run.id, owner, dict(result))
     except AppError as exc:
-        finish_run(database, run.id, owner, {"error": exc.code})
+        finish_run(database, run.id, owner, {**result, "error": exc.code})
     except Exception as exc:
         # Error classes only: external exceptions can embed tokens and response bodies.
         logger.error("Run %s failed: %s", run.id, type(exc).__name__)
-        finish_run(database, run.id, owner, {"error": "RUN_FAILED"})
+        finish_run(database, run.id, owner, {**result, "error": "RUN_FAILED"})
     return True
 
 

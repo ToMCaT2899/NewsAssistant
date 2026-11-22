@@ -12,9 +12,9 @@ from backend.app.domain.common import AppError, now, stamp
 from backend.app.domain.schedule import next_due
 from backend.app.domain.schemas import SubscriptionInput
 from backend.app.infrastructure.database import Database
-from backend.app.infrastructure.security import password_hash, token_for
+from backend.app.infrastructure.security import password_hash, token_for, user_from_token
 from backend.app.models.schema import Brief, Delivery, Subscription, User
-from backend.app.repository.queries import subscription_for
+from backend.app.repository.queries import subscription_for, user_for
 
 
 def subscription_view(row: Subscription) -> dict:
@@ -41,8 +41,8 @@ def bootstrap(database: Database, settings: Settings) -> bool:
         return False
     email = str(TypeAdapter(EmailStr).validate_python(settings.admin_email)).lower()
     password = settings.admin_password.get_secret_value()
-    if len(password) < 12:
-        raise ValueError("ADMIN_PASSWORD must contain at least 12 characters")
+    if not 12 <= len(password) <= 256:
+        raise ValueError("ADMIN_PASSWORD must contain 12 to 256 characters")
     with database.session.begin() as session:
         if session.scalar(select(User).where(User.email == email)):
             return False
@@ -136,3 +136,17 @@ def verify_recipient(database: Database, user_email: str, recipient: str) -> Non
         sub = subscription_for(session, user.id)
         sub.recipient_email, sub.recipient_verified_at = recipient, stamp()
         sub.version += 1
+
+
+def read_subscription(database: Database, user_id: str) -> dict:
+    with database.session() as session:
+        return subscription_view(subscription_for(session, user_id))
+
+
+def authenticate_token(database: Database, settings: Settings, token: str) -> str:
+    user_id = user_from_token(token, settings)
+    with database.session() as session:
+        user = user_for(session, user_id)
+        if user is None or not user.enabled:
+            raise AppError("UNAUTHORIZED", "登录已失效", 401)
+    return user_id
