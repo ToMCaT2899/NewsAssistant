@@ -13,6 +13,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+from cryptography.fernet import Fernet
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -43,6 +45,7 @@ def main() -> None:
     api_port, web_port = free_port(), free_port()
     env = os.environ | {
         "DATABASE_URL": "sqlite:///" + (run_dir / "browser.db").as_posix(),
+        "MODEL_ENCRYPTION_KEY": Fernet.generate_key().decode(),
         "JWT_SECRET": secrets.token_urlsafe(48),
         "ADMIN_EMAIL": "browser-test@example.com",
         "ADMIN_PASSWORD": password,

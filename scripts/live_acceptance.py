@@ -7,6 +7,8 @@ import secrets
 import tempfile
 from pathlib import Path
 
+from cryptography.fernet import Fernet
+from pydantic import SecretStr
 from sqlalchemy import select
 
 from backend.app.conf.settings import get_settings
@@ -22,6 +24,7 @@ from backend.app.service.accounts import (
     verify_recipient,
 )
 from backend.app.service.briefs import brief_detail
+from backend.app.service.model_config import ModelConfigInput, save
 from backend.app.service.runs import create_run
 from backend.app.worker.main import process_mail, process_run
 
@@ -51,6 +54,19 @@ async def accept(send_mail: bool, extra_sources: list[str], require_news: bool) 
             with database.session() as session:
                 user = required(session.scalar(select(User)))
                 user_id, email = user.id, user.email
+            if not settings.model_encryption_key.get_secret_value():
+                settings.model_encryption_key = SecretStr(Fernet.generate_key().decode())
+            save(
+                database,
+                settings,
+                user_id,
+                ModelConfigInput(
+                    version=0,
+                    base_url=settings.llm_base_url,
+                    model_name=settings.llm_model,
+                    api_key=settings.llm_api_key,
+                ),
+            )
             if send_mail:
                 verify_recipient(database, email, recipient)
             subscription = read_subscription(database, user_id)

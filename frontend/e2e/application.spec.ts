@@ -19,6 +19,52 @@ test("real API login, subscription save and queued task; no live model or mail",
   page,
 }, info) => {
   await signIn(page);
+  await expect(
+    page.getByRole("button", { name: "立即整理", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "模型设置", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "模型设置", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByLabel("API 地址", { exact: true })
+    .fill("https://example.com/v1");
+  await page
+    .getByLabel("模型名称", { exact: true })
+    .fill("offline-browser-fixture");
+  await page
+    .getByLabel("API Key", { exact: true })
+    .fill("offline-browser-model-key");
+  await page.getByRole("button", { name: "保存模型配置", exact: true }).click();
+  await expect(
+    page.getByText("模型配置已保存，API Key 已加密保存。", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("API Key", { exact: true })).toHaveValue("");
+  await page.screenshot({
+    path: info.outputPath("model-settings-desktop.png"),
+    fullPage: true,
+  });
+  await expect(
+    page.getByRole("button", { name: "立即整理", exact: true }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "清除模型配置", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "立即整理", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByLabel("API 地址", { exact: true })
+    .fill("https://example.com/v1");
+  await page
+    .getByLabel("模型名称", { exact: true })
+    .fill("offline-browser-fixture");
+  await page
+    .getByLabel("API Key", { exact: true })
+    .fill("offline-browser-model-key");
+  await page.getByRole("button", { name: "保存模型配置", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "立即整理", exact: true }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "我的简报", exact: true }).click();
   await expect(page.getByText("你的第一份简报，等待开始。")).toBeVisible();
   await page.getByRole("button", { name: "订阅偏好", exact: true }).click();
   await page.getByLabel("身份与关注背景").fill("关注开源模型的 Python 开发者");

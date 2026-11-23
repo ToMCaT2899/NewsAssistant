@@ -12,6 +12,7 @@ x-environment: &backend-environment
   APP_ENV: ${APP_ENV:-production}
   DATABASE_URL: sqlite:////app/data/news_assistant.db
   JWT_SECRET: ${JWT_SECRET:-}
+  MODEL_ENCRYPTION_KEY: ${MODEL_ENCRYPTION_KEY:-}
   LLM_PROVIDER: ${LLM_PROVIDER:-chat_completions}
   LLM_BASE_URL: ${LLM_BASE_URL:-}
   LLM_MODEL: ${LLM_MODEL:-}

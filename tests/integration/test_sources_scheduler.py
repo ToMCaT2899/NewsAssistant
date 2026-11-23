@@ -14,13 +14,16 @@ from tests.integration.test_application import FeedFixture, owner
 
 
 def test_duplicate_schedule_and_claim_are_idempotent(database, settings):
+    from tests.integration.test_chat import configured
+
+    configured(settings, database)
     with database.session.begin() as session:
         sub = session.scalar(select(Subscription))
         sub.enabled = 1
         sub.local_send_time = "00:00"
         sub.next_run_at = stamp(now() - timedelta(hours=1))
-    schedule_due(database)
-    schedule_due(database)
+    schedule_due(database, settings)
+    schedule_due(database, settings)
     with database.session() as session:
         assert session.scalar(select(func.count()).select_from(Run)) == 1
     assert claim_run(database, "worker-a", settings) is not None

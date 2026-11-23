@@ -33,6 +33,7 @@ from backend.app.repository.queries import (
     tools_for,
 )
 from backend.app.service.accounts import subscription_view
+from backend.app.service.model_config import require_config
 
 
 def run_view(run: Run, brief_id: str | None = None, reused: bool = False) -> dict:
@@ -66,8 +67,8 @@ def create_run(
     send_mail: bool = False,
     instruction: str = "",
 ) -> dict:
-    if require_model and (settings is None or not settings.model_configured):
-        raise AppError("MODEL_NOT_CONFIGURED", "请先配置模型地址、名称和 API Key", 503)
+    if require_model:
+        require_config(database, settings or Settings(), user_id)
     try:
         with database.session.begin() as session:
             return create_run_in_session(

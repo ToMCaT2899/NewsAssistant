@@ -7,7 +7,7 @@
 
 已实现 FastAPI 认证和订阅、LangGraph 工具循环、五个文件/受限命令工具、RSS 新闻工具、
 简报与来源持久化、独立调度 worker、事务 outbox、QQ SMTP 适配及 Vue 阅读页面。
-已提供 v1 → v2 → v3 SQL 迁移、依赖锁文件、Docker Compose 和离线测试。
+已提供 v1 → v4 SQL 迁移、依赖锁文件、Docker Compose 和离线测试。
 
 2026-11-23 已在隔离数据库中使用真实模型、RSS 原文和 QQ SMTP 完成一次三条新闻简报投递，
 用户确认实际收件、内容和链接正常；[真实联调记录](docs/development/NA-LIVE-20261123-001.md)
@@ -25,7 +25,7 @@ OpenAI 与 TechCrunch AI；来源可能返回空内容、近期无更新或暂�
 
 ```powershell
 Copy-Item .env.example .env
-# 编辑 .env，填写 JWT_SECRET、ADMIN_EMAIL、ADMIN_PASSWORD。
+# 编辑 .env，填写 JWT_SECRET、ADMIN_EMAIL、ADMIN_PASSWORD、MODEL_ENCRYPTION_KEY。
 docker compose config --quiet
 docker compose up -d --build
 docker compose ps
@@ -43,11 +43,25 @@ docker compose run --rm --no-deps migrate python -c "import secrets; print(secre
 ```
 
 首次初始化后的 .env 包含私密信息，仅保留本机；Git 与镜像构建均忽略它。
+MODEL_ENCRYPTION_KEY 使用独立的 Fernet 主密钥，在构建后生成一次并保存到本机 .env：
+
+```powershell
+docker compose run --rm --no-deps migrate python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+主密钥需与数据库备份分别妥善保管，升级或迁移时保留；更换/丢失主密钥会使已保存的 API Key 无法解密。
+没有设置主密钥时仍可登录和查看历史，但不能保存或使用用户模型配置。
 
 ## 模型、新闻与 QQ 邮箱
 
-- 模型：填写 LLM_BASE_URL（含 /v1 等实际 API 前缀）、LLM_MODEL、LLM_API_KEY。
-  提供商必须支持 chat completions 的 tools/tool_calls 协议。未提供凭证时生成请求返回 503。
+- 模型：登录后进入“模型设置”，填写个人 API 地址、模型名称、API Key 并保存。
+  提供商必须支持 Chat Completions 的 tools/tool_calls 协议，可点击“测试连接”验证。
+  模型 Key 在服务端加密保存，接口不回显；聊天、生成、每日调度都使用当前用户配置。
+  未配置不能使用这些功能，不能回退到服务器的模型密钥。
+  地址目前只允许公网 HTTPS 443，含实际 /v1 等前缀；不支持本机 Ollama、内网端点和自定义端口。
+  更换 API 地址须重新输入 Key；同一地址只改模型名时，Key 留空可保留。
+  有活动任务时不能修改/清除配置；清除后暂停新任务，历史记录保留。
+  .env 中 LLM_* 仅供显式隔离 CLI 联调，不自动导入网页账号。
 - 新闻：RSS_SOURCES_JSON 配置最多 10 个来源 ID/URL，模型可自主选源、换关键词和读原文。
   使用真实来源，不调用模型知识充当今日新闻；仅摘要证据会明确标注。
 - QQ 邮件：在 QQ 邮箱开启 SMTP，填写 SMTP_USERNAME、SMTP_AUTH_CODE；
@@ -164,6 +178,7 @@ SMTP `250` 仅代表服务器接收；实际入箱和内容仍须收件人核查
 - [Compose 运行说明](docs/07-Docker-Compose运行说明.md)
 - [实现决策 ADR](docs/adr/0003-MVP实现决策.md)
 - [本次执行记录与需求映射](docs/development/NA-RUN-20261122-001.md)
+- [用户模型设置与收尾检查](docs/development/NA-MODEL-20261123-001.md)
 - [归档开发提示词](docs/prompts/README.md)
 - [文字需求基线](docs/requirements/2026-11-22-需求基线.md)
 - [开发约定](AGENTS.md)

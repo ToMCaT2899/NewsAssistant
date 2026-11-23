@@ -16,7 +16,7 @@ from backend.app.agent.tools.files import FileTools
 from backend.app.agent.tools.news import NewsTools
 from backend.app.agent.tools.registry import Registry
 from backend.app.conf.settings import Settings, get_settings
-from backend.app.domain.common import AppError, identifier, now, stamp
+from backend.app.domain.common import AppError, identifier, now, required, stamp
 from backend.app.domain.schedule import local_due, next_due
 from backend.app.domain.schemas import BriefDraft
 from backend.app.infrastructure.database import Database
@@ -30,6 +30,7 @@ from backend.app.service.deliveries import (
     finish_delivery,
     recover_deliveries,
 )
+from backend.app.service.model_config import resolve
 from backend.app.service.runs import (
     audit_tool,
     claim_run,
@@ -42,7 +43,8 @@ from backend.app.service.runs import (
 logger = logging.getLogger(__name__)
 
 
-def schedule_due(database: Database) -> None:
+def schedule_due(database: Database, settings: Settings | None = None) -> None:
+    settings = settings or get_settings()
     current = now()
     with database.session() as session:
         subscriptions = list(
@@ -62,6 +64,8 @@ def schedule_due(database: Database) -> None:
                     day.isoformat(),
                     trigger="scheduled",
                     expected_version=sub.version,
+                    require_model=True,
+                    settings=settings,
                 )
         except AppError as exc:
             if exc.code not in {"TASK_CONFLICT", "SUBSCRIPTION_CHANGED"}:
@@ -86,6 +90,11 @@ async def process_run(
         return False
     result: dict = {}
     try:
+        if model is None:
+            with database.session() as session:
+                subscription = required(session.get(Subscription, run.subscription_id))
+                user_id = subscription.user_id
+            settings = resolve(database, settings, user_id)
         news = NewsTools(database, run, settings, reader)
         files = FileTools(settings.agent_workspace_root / run.id, settings.shell_tool_enabled)
         runner = AgentRunner(
@@ -172,7 +181,7 @@ async def run_worker() -> None:
             )
             recover_expired(database)
             recover_deliveries(database)
-            schedule_due(database)
+            schedule_due(database, settings)
             did_work = await process_run(database, settings, owner)
             did_work = await process_chat(database, settings, owner) or did_work
             did_work = await process_mail(database, settings, owner) or did_work

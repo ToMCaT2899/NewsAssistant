@@ -1,5 +1,6 @@
 """通过显式配置使用聊天补全接口的工具调用适配器。"""
 
+import asyncio
 import json
 from typing import Protocol
 
@@ -7,6 +8,7 @@ import httpx
 
 from backend.app.conf.settings import Settings
 from backend.app.domain.common import AppError
+from backend.app.infrastructure.model_endpoint import pinned_endpoint
 
 
 class ModelClient(Protocol):
@@ -18,6 +20,13 @@ class ChatCompletionsClient:
         self.settings = settings
 
     async def complete(self, messages: list[dict], tools: list[dict], timeout: float) -> dict:
+        try:
+            async with asyncio.timeout(timeout):
+                return await self._complete(messages, tools, timeout)
+        except TimeoutError as exc:
+            raise AppError("MODEL_TEMPORARY", "模型连接超时或不可用", 503) from exc
+
+    async def _complete(self, messages: list[dict], tools: list[dict], timeout: float) -> dict:
         settings = self.settings
         if not settings.model_configured:
             raise AppError("MODEL_NOT_CONFIGURED", "请配置模型地址、名称和 API Key", 503)
@@ -26,10 +35,17 @@ class ChatCompletionsClient:
         url = settings.llm_base_url.rstrip("/") + "/chat/completions"
         async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
             try:
+                headers = {"Authorization": "Bearer " + settings.llm_api_key.get_secret_value()}
+                extensions: dict = {}
+                target = httpx.URL(url)
+                if settings.llm_public_endpoint:
+                    target, host_headers, extensions = await pinned_endpoint(settings.llm_base_url)
+                    headers.update(host_headers)
                 async with client.stream(
                     "POST",
-                    url,
-                    headers={"Authorization": "Bearer " + settings.llm_api_key.get_secret_value()},
+                    target,
+                    headers=headers,
+                    extensions=extensions,
                     json={
                         "model": settings.llm_model,
                         "messages": messages,
@@ -74,7 +90,7 @@ class ChatCompletionsClient:
                     result["tool_calls"] = message["tool_calls"]
                 result["_usage"] = payload.get("usage", {})
                 return result
-            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+            except (httpx.TimeoutException, httpx.NetworkError, OSError) as exc:
                 raise AppError("MODEL_TEMPORARY", "模型连接超时或不可用", 503) from exc
             except (KeyError, ValueError, IndexError, TypeError, AttributeError) as exc:
                 raise AppError("MODEL_PROTOCOL_ERROR", "模型未返回有效的工具调用协议", 503) from exc

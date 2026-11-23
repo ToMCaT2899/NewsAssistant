@@ -5,6 +5,7 @@ description = "Design and scaffolding for a daily AI news assistant"
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.15.0",
+    "cryptography>=50.0.2",
     "email-validator>=2.4.0",
     "fastapi>=0.165.0",
     "feedparser>=6.0.14",

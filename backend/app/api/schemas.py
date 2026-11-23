@@ -114,3 +114,18 @@ class ChatTurnOutput(BaseModel):
     run_id: str | None
     tools: list[ToolOutput]
     brief: BriefOutput | None
+
+
+class ModelConfigOutput(BaseModel):
+    base_url: str
+    model_name: str
+    has_api_key: bool
+    configured: bool
+    storage_ready: bool
+    version: int
+    tested_at: str | None
+
+
+class ConnectionTestOutput(BaseModel):
+    status: str
+    message: str

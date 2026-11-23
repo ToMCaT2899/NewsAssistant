@@ -15,6 +15,7 @@ from backend.app.infrastructure.database import Database
 from backend.app.infrastructure.security import password_hash, token_for, user_from_token
 from backend.app.models.schema import Brief, Delivery, Subscription, User
 from backend.app.repository.queries import subscription_for, user_for
+from backend.app.service.model_config import require_config
 
 
 def subscription_view(row: Subscription) -> dict:
@@ -81,6 +82,8 @@ def save_subscription(
     data: SubscriptionInput,
     settings: Settings,
 ) -> dict:
+    if data.enabled:
+        require_config(database, settings, user_id)
     with database.session.begin() as session:
         row = subscription_for(session, user_id)
         verified = (

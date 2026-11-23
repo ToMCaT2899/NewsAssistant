@@ -21,7 +21,7 @@ SQLite 使用文件卷，不需要 MySQL/PostgreSQL/Redis 容器。
 
 ```powershell
 Copy-Item .env.example .env
-# 编辑 JWT_SECRET（至少32随机字符）、ADMIN_EMAIL、ADMIN_PASSWORD（至少12字符）
+# 编辑 JWT_SECRET（至少32随机字符）、ADMIN_EMAIL、ADMIN_PASSWORD（至少12字符）、MODEL_ENCRYPTION_KEY
 docker compose config --quiet
 docker compose up -d --build
 docker compose ps
@@ -32,7 +32,7 @@ docker compose ps
 Compose 不向宿主机发布 API/worker 端口。
 不要把含真实 .env 的完整 docker compose config 输出贴到公开日志；使用 --quiet 校验。
 
-migrate 使用有版本的 SQL 升级到 v2，成功后 api/worker 启动。
+migrate 使用有版本的 SQL 升级到 v4，成功后 api/worker 启动。
 Bootstrap 仅在配置完整且账号不存在时创建用户与默认订阅，不覆盖已有密码。
 管理员密码只注入迁移服务，不传入前端或模型。
 没有模型/邮箱凭证也可登录和编辑订阅；生成请求明确拒绝未配置模型，邮件状态明确失败或未配置。
@@ -40,9 +40,12 @@ Bootstrap 仅在配置完整且账号不存在时创建用户与默认订阅，�
 
 ## 3. 外部服务
 
-LLM_PROVIDER=chat_completions，填写实际 LLM_BASE_URL（包含 /v1 等前缀）、LLM_MODEL、LLM_API_KEY。
-必须支持 tools/tool_calls；系统不会自动选择付费模型或创建资源。
-修改配置后用 docker compose up -d 重新创建服务，以便读取新环境变量。
+模型在登录后的“模型设置”中保存个人配置，必须支持 Chat Completions 的 tools/tool_calls。
+未保存个人配置不能聊天、生成简报或开启每日订阅；不回退环境模型 Key。
+用户配置保存后无需重启容器；修改基础设施环境变量时才重新创建服务。
+LLM_* 环境变量仅供显式隔离 CLI 联调。系统不会自动选择付费模型或创建资源。
+管理员先按 [README](../README.md) 生成 MODEL_ENCRYPTION_KEY 并保留于 .env，
+不能在升级时重新生成，也不能与数据库备份一起公开；迁移机器需安全转移同一主密钥。
 
 RSS_SOURCES_JSON 是来源 ID 到 HTTPS URL 的映射，最多 10 个；
 search_news 在这些源中按关键词过滤，不是全网搜索。

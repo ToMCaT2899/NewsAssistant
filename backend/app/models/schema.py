@@ -193,3 +193,14 @@ class ChatTurn(Entity, Created, Updated, Base):
     events_json: Mapped[str] = mapped_column(Text, default="[]")
     lease_owner: Mapped[str | None] = mapped_column(String)
     lease_expires_at: Mapped[str | None] = mapped_column(String)
+
+
+class UserModelConfig(Base):
+    __tablename__ = "user_model_configs"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    base_url: Mapped[str] = mapped_column(Text, default="")
+    model_name: Mapped[str] = mapped_column(String, default="")
+    encrypted_api_key: Mapped[str] = mapped_column(Text, default="")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    tested_at: Mapped[str | None] = mapped_column(String)
+    updated_at: Mapped[str] = mapped_column(String, default=stamp)

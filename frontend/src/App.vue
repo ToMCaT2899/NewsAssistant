@@ -7,8 +7,9 @@ import SubscriptionView from "./views/SubscriptionView.vue";
 import BriefsView from "./views/BriefsView.vue";
 import TasksView from "./views/TasksView.vue";
 import ChatView from "./views/ChatView.vue";
+import ModelSettingsView from "./views/ModelSettingsView.vue";
 
-type Tab = "briefs" | "subscription" | "tasks" | "chat";
+type Tab = "briefs" | "subscription" | "tasks" | "chat" | "model";
 const loggedIn = ref(Boolean(session.get()));
 const tab = ref<Tab>("briefs");
 const busy = ref(false);
@@ -64,6 +65,12 @@ onBeforeUnmount(() => window.removeEventListener("session-expired", signOut));
       <p class="sidebar-caption">你的每日 AI 新闻助手</p>
       <nav aria-label="主导航">
         <button
+          :aria-current="tab === 'model' ? 'page' : undefined"
+          @click="tab = 'model'"
+        >
+          模型设置
+        </button>
+        <button
           :aria-current="tab === 'chat' ? 'page' : undefined"
           @click="tab = 'chat'"
         >
@@ -107,7 +114,12 @@ onBeforeUnmount(() => window.removeEventListener("session-expired", signOut));
         class="setup-notice"
       >
         <p v-if="!status.model_configured">
-          模型尚未配置，暂时无法生成简报。请联系管理员完成配置。
+          请先配置你的模型，才能使用聊天和简报生成。<button
+            class="text-button"
+            @click="tab = 'model'"
+          >
+            前往模型设置
+          </button>
         </p>
         <p v-if="!status.mail_configured">
           邮件通道尚未配置，简报生成后仍可在这里查看。
@@ -124,6 +136,9 @@ onBeforeUnmount(() => window.removeEventListener("session-expired", signOut));
         :status="status"
         @preferences="tab = 'subscription'"
         @briefs="tab = 'briefs'"
+      /><ModelSettingsView
+        v-else-if="tab === 'model'"
+        @saved="loadStatus"
       /><TasksView v-else />
     </main>
   </div>

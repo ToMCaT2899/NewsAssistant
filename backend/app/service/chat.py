@@ -19,6 +19,7 @@ from backend.app.infrastructure.database import Database
 from backend.app.infrastructure.llm import ChatCompletionsClient, ModelClient
 from backend.app.models.schema import ChatSession, ChatTurn, Run
 from backend.app.service.briefs import brief_detail
+from backend.app.service.model_config import require_config, resolve
 from backend.app.service.runs import create_run_in_session, get_run, list_tool_calls
 
 
@@ -62,8 +63,7 @@ def start_turn(
 ) -> dict:
     if not data.message.strip():
         raise AppError("INVALID_INPUT", "请输入消息", 422)
-    if not settings.model_configured:
-        raise AppError("MODEL_NOT_CONFIGURED", "请先配置模型服务", 503)
+    require_config(database, settings, user_id)
     try:
         with database.session.begin() as session:
             thread = owned_session(session, user_id, session_id)
@@ -252,6 +252,8 @@ async def process_chat(
 
     prompt = (settings.root / "backend/app/agent/prompts/chat.txt").read_text(encoding="utf-8")
     try:
+        if model is None:
+            settings = resolve(database, settings, user_id)
         state = await AgentRunner(
             model or ChatCompletionsClient(settings),
             Registry(ChatTools(database, user_id).definitions()),

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from cryptography.fernet import Fernet
 
 from backend.app.conf.settings import Settings
 from backend.app.infrastructure.database import Database
@@ -20,6 +21,7 @@ def settings(tmp_path: Path) -> Settings:
         smtp_username="",
         smtp_auth_code="",
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
+        model_encryption_key=Fernet.generate_key().decode(),
         jwt_secret="offline-test-signing-secret-not-for-production",
         admin_email="admin@example.com",
         admin_password="Offline-test-password-2026",

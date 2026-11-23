@@ -17,6 +17,8 @@ from backend.app.api.schemas import (
     ChatSessionOutput,
     ChatTurnOutput,
     ChatTurnTicket,
+    ConnectionTestOutput,
+    ModelConfigOutput,
     RetryOutput,
     RunOutput,
     ServiceStatus,
@@ -28,7 +30,7 @@ from backend.app.conf.settings import Settings, get_settings
 from backend.app.domain.common import AppError, identifier
 from backend.app.domain.schemas import Login, RetryRequest, SubscriptionInput
 from backend.app.infrastructure.database import Database
-from backend.app.service import chat
+from backend.app.service import chat, model_config
 from backend.app.service.accounts import (
     authenticate_token,
     login,
@@ -110,7 +112,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/ready")
     def readiness() -> dict:
         version = database.schema_version()
-        if version != 3:
+        if version != 4:
             raise AppError("MIGRATION_REQUIRED", "数据库需要迁移", 503)
         return {"status": "ready", "schema_version": version}
 
@@ -135,10 +137,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/v1/status", response_model=ServiceStatus)
     def status(_user_id: str = Depends(current_user)) -> dict:
         return {
-            "model_configured": settings.model_configured,
+            "model_configured": model_config.view(database, settings, _user_id)["configured"],
             "mail_configured": settings.mail_configured,
             "news_provider": "configured_rss",
         }
+
+    @app.get("/api/v1/model-config", response_model=ModelConfigOutput)
+    def get_model_config(user_id: str = Depends(current_user)) -> dict:
+        return model_config.view(database, settings, user_id)
+
+    @app.put("/api/v1/model-config", response_model=ModelConfigOutput)
+    def save_model_config(
+        data: model_config.ModelConfigInput, user_id: str = Depends(current_user)
+    ) -> dict:
+        return model_config.save(database, settings, user_id, data)
+
+    @app.delete("/api/v1/model-config", response_model=ModelConfigOutput)
+    def clear_model_config(
+        version: int = Query(ge=0), user_id: str = Depends(current_user)
+    ) -> dict:
+        return model_config.clear(database, settings, user_id, version)
+
+    @app.post("/api/v1/model-config/test", response_model=ConnectionTestOutput)
+    async def test_model_config(user_id: str = Depends(current_user)) -> dict:
+        return await model_config.test_connection(database, settings, user_id)
 
     @app.get("/api/v1/subscription", response_model=SubscriptionOutput)
     def get_subscription(user_id: str = Depends(current_user)) -> dict:

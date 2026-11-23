@@ -622,6 +622,7 @@ code {
   }
   .sidebar nav {
     display: flex;
+    flex-wrap: wrap;
     margin-top: 15px;
     gap: 6px;
   }
@@ -992,5 +993,66 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .chat-tools .tool-dot {
     animation: none !important;
+  }
+}
+
+.model-settings {
+  max-width: 900px;
+}
+.model-settings-intro {
+  border-left: 3px solid #006d77;
+  padding: 12px 18px;
+  margin-bottom: 24px;
+  background: #e8f3f3;
+}
+.model-settings-intro p {
+  margin: 6px 0 0;
+  color: #526a7b;
+  font-size: 14px;
+}
+.model-settings-form {
+  background: #fff;
+  padding: 28px;
+  border: 1px solid #d4e0e7;
+  border-radius: 10px;
+}
+.model-settings-form > label {
+  margin-bottom: 8px;
+}
+.model-settings-form > input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #bbcdd8;
+  border-radius: 6px;
+  color: inherit;
+}
+.model-settings-form > small {
+  display: block;
+  margin: 8px 0 22px;
+  font-weight: 400;
+}
+.model-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 24px 0 14px;
+}
+.model-settings-form .small {
+  margin-bottom: 0;
+}
+.model-settings-notice {
+  background: #e6f4ef;
+  color: #166a56;
+}
+.model-settings-footer {
+  margin-top: 24px;
+}
+.model-settings-footer small {
+  display: block;
+  margin-top: 8px;
+}
+@media (max-width: 650px) {
+  .model-settings-form {
+    padding: 20px 16px;
   }
 }

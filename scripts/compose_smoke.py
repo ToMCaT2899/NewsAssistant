@@ -13,6 +13,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from cryptography.fernet import Fernet
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -23,6 +25,7 @@ def main() -> None:
         "APP_PORT": "0",
         "COMPOSE_PROFILES": "",
         "JWT_SECRET": secrets.token_urlsafe(48),
+        "MODEL_ENCRYPTION_KEY": Fernet.generate_key().decode(),
         "ADMIN_EMAIL": "compose-test@example.com",
         "ADMIN_PASSWORD": password,
         "VERIFIED_RECIPIENT_EMAIL": "",
@@ -114,13 +117,13 @@ def main() -> None:
             "-c",
             "import sqlite3; c=sqlite3.connect('/app/data/news_assistant.db'); "
             "assert c.execute('PRAGMA integrity_check').fetchone()[0]=='ok'; "
-            "assert c.execute('SELECT MAX(version) FROM schema_migrations').fetchone()[0]==3; "
+            "assert c.execute('SELECT MAX(version) FROM schema_migrations').fetchone()[0]==4; "
             "assert c.execute('SELECT persona FROM subscriptions').fetchone()[0]"
             "=='Compose persistence test'; print('Compose volume persistence verified')",
         )
         print(
             "Compose smoke passed: health, auth, subscription, missing-provider error, recreation, "
-            "and persistent schema v3. Live model/SMTP and public deployment were not tested."
+            "and persistent schema v4. Live model/SMTP and public deployment were not tested."
         )
     finally:
         subprocess.run([*prefix, "down", "--remove-orphans"], cwd=ROOT, env=env, check=False)

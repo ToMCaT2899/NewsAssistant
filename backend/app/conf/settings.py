@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str = "sqlite:///./data/news_assistant.db"
     jwt_secret: SecretStr = SecretStr("")
+    model_encryption_key: SecretStr = SecretStr("")
     token_minutes: int = Field(60, ge=5, le=1440)
     admin_email: str = ""
     admin_password: SecretStr = SecretStr("")
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_model: str = ""
     llm_api_key: SecretStr = SecretStr("")
+    llm_public_endpoint: bool = False
     agent_max_model_calls: int = Field(15, ge=1, le=100)
     agent_max_tool_calls: int = Field(20, ge=1, le=100)
     agent_max_seconds: int = Field(180, ge=1, le=900)

@@ -19,6 +19,15 @@ export interface ServiceStatus {
   mail_configured: boolean;
   news_provider: string;
 }
+export interface ModelConfiguration {
+  base_url: string;
+  model_name: string;
+  has_api_key: boolean;
+  configured: boolean;
+  storage_ready: boolean;
+  version: number;
+  tested_at: string | null;
+}
 export interface Run {
   id: string;
   run_id: string;

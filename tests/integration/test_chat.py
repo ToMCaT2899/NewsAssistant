@@ -21,17 +21,30 @@ from tests.integration.test_application import FeedFixture, ResearchModel, owner
 from tests.unit.test_graph import call
 
 
-def configured(settings):
+def configured(settings, database):
     settings.llm_base_url = "https://example.com/v1"
     settings.llm_model = "offline-chat-test"
     settings.llm_api_key = type(settings.llm_api_key)("offline-test-key")
+    from backend.app.service.model_config import ModelConfigInput, save
+
+    save(
+        database,
+        settings,
+        owner(database),
+        ModelConfigInput(
+            version=0,
+            base_url="https://example.com/v1",
+            model_name="offline-chat-test",
+            api_key="offline-test-key",
+        ),
+    )
     settings.smtp_username = "sender@example.com"
     settings.smtp_auth_code = type(settings.smtp_auth_code)("offline-test-code")
 
 
 @pytest.mark.asyncio
 async def test_regenerate_preserves_daily_and_sends_once_when_daily_disabled(database, settings):
-    configured(settings)
+    configured(settings, database)
     uid = owner(database)
     create_run(database, uid, "daily")
     await process_run(database, settings, "worker", ResearchModel(), FeedFixture())
@@ -80,7 +93,7 @@ async def test_regenerate_preserves_daily_and_sends_once_when_daily_disabled(dat
 
 
 def test_chat_permission_and_unverified_send_are_atomic(database, settings):
-    configured(settings)
+    configured(settings, database)
     uid = owner(database)
     thread = chat.new_session(database, uid)
     with database.session.begin() as session:
@@ -115,7 +128,7 @@ def test_chat_permission_and_unverified_send_are_atomic(database, settings):
 async def test_chat_uses_readonly_tools_and_persists_running_events(
     database, settings, monkeypatch
 ):
-    configured(settings)
+    configured(settings, database)
     uid = owner(database)
     thread = chat.new_session(database, uid)
     chat.start_turn(
@@ -189,8 +202,8 @@ async def test_v2_upgrade_preserves_briefs_sources_and_deliveries(tmp_path, sett
             (id,brief_id,recipient_email,message_id,next_attempt_at,created_at,updated_at) VALUES
             ('d','b','u@example.com','<test@example.com>','t','t','t')
         """)
-    assert migrate(settings.database_url, settings.root / "database/migrations") == 3
-    assert migrate(settings.database_url, settings.root / "database/migrations") == 3
+    assert migrate(settings.database_url, settings.root / "database/migrations") == 4
+    assert migrate(settings.database_url, settings.root / "database/migrations") == 4
     with sqlite3.connect(tmp_path / "upgrade.db") as c:
         assert c.execute("PRAGMA foreign_key_check").fetchall() == []
         assert c.execute("SELECT edition,title FROM briefs").fetchone() == (0, "标题")
@@ -225,7 +238,7 @@ def test_failed_foreign_key_check_rolls_back_table_rebuild(tmp_path, settings):
 
 
 def test_expired_chat_closes_running_tool_and_allows_next_turn(database, settings):
-    configured(settings)
+    configured(settings, database)
     uid = owner(database)
     thread = chat.new_session(database, uid)
     chat.start_turn(database, settings, uid, thread["id"], "old", chat.TurnInput(message="旧问题"))
