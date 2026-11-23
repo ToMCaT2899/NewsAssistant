@@ -1,4 +1,4 @@
-"""Stable errors, UTC representation and identifiers."""
+"""统一的异常、UTC 时间表示和标识符。"""
 
 from datetime import UTC, datetime
 from typing import TypeVar

@@ -1,4 +1,4 @@
-"""Offline fixtures; these credentials and providers are never used for real network calls."""
+"""离线测试夹具；其中的凭证和服务配置不会用于真实网络调用。"""
 
 from pathlib import Path
 

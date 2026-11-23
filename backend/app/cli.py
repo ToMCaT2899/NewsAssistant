@@ -1,4 +1,4 @@
-"""Administrative operations; no credentials in command-line arguments."""
+"""管理操作入口，命令行参数不得包含凭证。"""
 
 import argparse
 import asyncio

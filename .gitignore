@@ -1,4 +1,4 @@
-# Secrets
+# 密钥与私密配置
 .env
 .env.*
 !.env.example
@@ -10,7 +10,7 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 *.egg-info/
-# Local data and task outputs
+# 本地数据和任务产物
 /data/*
 !/data/.gitkeep
 /workspace/*
@@ -19,19 +19,19 @@ __pycache__/
 *.db-*
 *.sqlite*
 *.log
-# Frontend
+# 前端
 node_modules/
 dist/
 coverage/
-# Editors and OS
+# 编辑器与操作系统
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
-# User-provided requirement screenshots remain local
+# 用户提供的需求截图仅保留在本机
 /docs/requirements/sources/
 
-# Local test artifacts and screenshots
+# 本地测试产物与截图
 /artifacts/
 /frontend/test-results/
 /frontend/playwright-report/

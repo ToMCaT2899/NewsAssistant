@@ -1,4 +1,4 @@
-"""Run-scoped file tools and a fixed-command subprocess bridge."""
+"""限定单次任务工作区的文件工具与固定命令子进程接口。"""
 
 import asyncio
 import os

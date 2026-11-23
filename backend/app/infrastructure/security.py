@@ -1,4 +1,4 @@
-"""Password hashing and short-lived signed bearer tokens."""
+"""密码哈希和短期有效的签名身份令牌。"""
 
 from datetime import timedelta
 

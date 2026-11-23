@@ -1,4 +1,4 @@
-"""A real conditional LangGraph loop; tools are selected by model responses."""
+"""通过条件分支运行的 LangGraph 循环，由模型响应选择工具。"""
 
 import asyncio
 import json

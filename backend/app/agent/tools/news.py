@@ -1,4 +1,4 @@
-"""RSS-backed keyword discovery and per-run source provenance."""
+"""基于 RSS 的关键词检索与单次任务的来源追溯。"""
 
 import calendar
 import hashlib

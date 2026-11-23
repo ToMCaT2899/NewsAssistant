@@ -1,4 +1,4 @@
-"""Offline API, persistence and worker tests. No real model or SMTP calls."""
+"""API、持久化和工作进程的离线测试，不调用真实模型或 SMTP。"""
 
 import json
 from datetime import timedelta
@@ -70,7 +70,7 @@ def test_auth_subscription_version_and_missing_model(database, settings):
 
 
 class FeedFixture:
-    """Deliberately injected offline RSS, never used in the default application."""
+    """显式注入的离线 RSS 替身，不用于应用默认运行路径。"""
 
     async def get(self, url, timeout=15):
         date = (now() - timedelta(hours=1)).strftime("%a, %d %b %Y %H:%M:%S GMT")

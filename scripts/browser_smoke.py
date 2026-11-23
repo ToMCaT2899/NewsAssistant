@@ -1,7 +1,7 @@
-"""Real local browser/API smoke test with disposable credentials and an isolated database.
+"""使用临时凭证和隔离数据库执行本地真实浏览器与 API 冒烟检查。
 
-The worker is deliberately not started. Queuing is tested; live LLM generation and SMTP are not.
-Uses the host's Chrome and does not download a browser or expose any service publicly.
+有意不启动工作进程；仅验证任务入队，不验证真实模型生成或 SMTP 投递。
+使用宿主机 Chrome，不下载浏览器，也不将服务暴露到公网。
 """
 
 import os

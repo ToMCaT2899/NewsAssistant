@@ -1,4 +1,4 @@
-"""Bounded public HTTP reads with DNS pinning and validated redirects."""
+"""限制公网 HTTP 读取范围，固定已校验的 DNS 地址并验证重定向。"""
 
 import asyncio
 import ipaddress
@@ -62,7 +62,7 @@ class WebReader:
                 ips = {str(item[4][0]) for item in addresses}
                 if not ips or not all(public_ip(ip) for ip in ips):
                     raise AppError("UNSAFE_URL", "目标地址不可访问")
-                # Connect to a validated address, preserving TLS SNI and the HTTP Host.
+                # 连接已校验的地址，同时保留 TLS SNI 和 HTTP Host。
                 ip = sorted(ips)[0]
                 target = httpx.URL(url).copy_with(host=ip)
                 async with client.stream(

@@ -1,4 +1,4 @@
-"""Single independent worker: schedule, execute one run, then drain one delivery."""
+"""独立工作进程：调度任务、执行一次生成，再处理一条邮件投递。"""
 
 import asyncio
 import json
@@ -125,7 +125,7 @@ async def process_run(
     except AppError as exc:
         finish_run(database, run.id, owner, {**result, "error": exc.code})
     except Exception as exc:
-        # Error classes only: external exceptions can embed tokens and response bodies.
+        # 仅记录异常类型，外部异常信息可能包含令牌和响应正文。
         logger.error("Run %s failed: %s", run.id, type(exc).__name__)
         finish_run(database, run.id, owner, {**result, "error": "RUN_FAILED"})
     return True
@@ -145,7 +145,7 @@ async def process_mail(database: Database, settings: Settings, owner: str, sende
             (sender or QQSender(settings)).send, message, row.recipient_email
         )
     except Exception:
-        # We cannot assume an unexpected exception means SMTP did not accept the message.
+        # 不能根据未预期异常就认定 SMTP 尚未接收邮件。
         outcome = MailResult("unknown", "SMTP_RESULT_UNKNOWN")
     finish_delivery(database, row, owner, outcome, settings)
     return True

@@ -1,4 +1,4 @@
-"""Transactional numbered SQL migrations; preserve the archived initial DDL."""
+"""按编号以事务执行 SQL 迁移，保留已归档的初始 DDL。"""
 
 import sqlite3
 from pathlib import Path

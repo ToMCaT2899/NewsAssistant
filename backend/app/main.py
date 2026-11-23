@@ -1,4 +1,4 @@
-"""FastAPI application. Scheduling runs only in the independent worker."""
+"""FastAPI 应用；调度仅在独立工作进程中运行。"""
 
 import threading
 import time

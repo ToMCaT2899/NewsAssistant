@@ -1,4 +1,4 @@
-"""Explicitly configured chat-completions tool-calling adapter."""
+"""通过显式配置使用聊天补全接口的工具调用适配器。"""
 
 import json
 from typing import Protocol
@@ -68,7 +68,7 @@ class ChatCompletionsClient:
                     ):
                         raise ValueError("Invalid tool call protocol")
                     seen.add(call["id"])
-                # Do not forward provider-specific hidden reasoning fields.
+                # 不转发服务商特有的隐藏推理字段。
                 result = {"role": "assistant", "content": content}
                 if message.get("tool_calls"):
                     result["tool_calls"] = message["tool_calls"]

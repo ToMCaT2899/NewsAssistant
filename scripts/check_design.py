@@ -1,4 +1,4 @@
-"""Check repository design links, SQLite constraints, and initialization behavior."""
+"""检查仓库设计文档链接、SQLite 约束和初始化行为。"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ END = "2026-11-23T00:00:00.000Z"
 
 
 def insert(connection: sqlite3.Connection, table: str, **values: object) -> None:
-    """Identifiers here are internal constants, never user input."""
+    """此处的标识符均为内部常量，不接受用户输入。"""
     columns = ", ".join(values)
     placeholders = ", ".join("?" for _ in values)
     connection.execute(

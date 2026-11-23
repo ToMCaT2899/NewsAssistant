@@ -1,4 +1,4 @@
-"""Transactional outbox claims, rendering, bounded retries and ambiguity recovery."""
+"""事务发件箱的投递认领、渲染、有限重试与结果不确定时的恢复。"""
 
 from datetime import timedelta
 from email.message import EmailMessage

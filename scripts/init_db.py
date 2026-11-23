@@ -1,4 +1,4 @@
-"""Create a new SQLite database from the versioned initial schema."""
+"""根据带版本的初始表结构创建 SQLite 数据库。"""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ SCHEMA = ROOT / "database" / "migrations" / "001_initial.sql"
 
 
 def initialize(database: Path) -> None:
-    """Create exclusively; rollback and remove only this invocation's new file on failure."""
+    """独占创建数据库；失败时回滚，并且仅删除本次调用新建的文件。"""
     database = database.resolve()
     database.parent.mkdir(parents=True, exist_ok=True)
-    # Exclusive creation prevents overwriting an existing database, including concurrent setup.
+    # 独占创建可防止覆盖已有数据库，也适用于并发初始化。
     with database.open("xb"):
         pass
     connection = None

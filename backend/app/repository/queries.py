@@ -1,4 +1,4 @@
-"""Ownership-scoped reads. No commits in this module."""
+"""查询限定资源归属，本模块不提交事务。"""
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session

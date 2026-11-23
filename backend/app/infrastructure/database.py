@@ -1,4 +1,4 @@
-"""Short-lived database sessions; services own transaction boundaries."""
+"""短生命周期数据库会话，事务边界由业务服务管理。"""
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker

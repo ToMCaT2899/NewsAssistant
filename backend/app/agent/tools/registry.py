@@ -1,4 +1,4 @@
-"""Typed tool registration, bounded results and safe errors."""
+"""带类型的工具注册、结果大小限制和安全错误处理。"""
 
 import asyncio
 import json
@@ -70,7 +70,7 @@ class Registry:
         except (TimeoutError, OSError):
             code, message = "TOOL_TIMEOUT_OR_IO", "工具超时或资源不可用"
         except Exception:
-            # Untrusted provider exceptions may contain credentials or article bodies.
+            # 不可信的外部服务异常可能包含凭证或文章正文。
             code, message = "TOOL_FAILED", "外部工具执行失败"
         return {
             "ok": False,

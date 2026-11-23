@@ -1,4 +1,4 @@
-"""QQ SMTP transport: accepted, definite rejection, or ambiguous outcome."""
+"""QQ SMTP 传输：区分已接收、明确拒绝和结果不确定。"""
 
 import smtplib
 import ssl
@@ -66,7 +66,7 @@ class QQSender:
             )
         finally:
             if smtp is not None:
-                # DATA acceptance is authoritative; a QUIT failure cannot undo it.
+                # 以 DATA 阶段的接收结果为准，QUIT 失败不能撤销已接收的邮件。
                 try:
                     smtp.close()
                 except OSError:

@@ -1,4 +1,4 @@
-"""Public contracts and model output schemas."""
+"""公共接口契约与模型输出结构。"""
 
 import re
 from datetime import time

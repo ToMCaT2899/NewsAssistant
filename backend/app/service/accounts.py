@@ -1,4 +1,4 @@
-"""Account bootstrap and versioned subscription updates."""
+"""账号初始化和带版本控制的订阅更新。"""
 
 import json
 from typing import cast
@@ -64,7 +64,7 @@ def bootstrap(database: Database, settings: Settings) -> bool:
 def login(database: Database, settings: Settings, email: str, password: str) -> str:
     with database.session() as session:
         user = session.scalar(select(User).where(User.email == email.lower(), User.enabled == 1))
-        # Hash verification uses the same expensive path for unknown users.
+        # 未知用户也执行相同开销的哈希校验，避免通过耗时差异探测账号。
         target = user.password_hash if user else password_hash.hash("unknown-user-dummy")
         try:
             valid = password_hash.verify(password, target)

@@ -1,4 +1,4 @@
-"""ORM mappings. Versioned SQL, not create_all(), owns database constraints."""
+"""ORM 映射；数据库约束由版本化 SQL 管理，不使用 create_all() 创建。"""
 
 from sqlalchemy import ForeignKey, ForeignKeyConstraint, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column

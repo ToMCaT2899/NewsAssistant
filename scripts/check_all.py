@@ -1,4 +1,4 @@
-"""Offline checks for the Compose check image; never calls live model or SMTP services."""
+"""供 Compose 检查镜像执行的离线检查，不调用真实模型或 SMTP 服务。"""
 
 import subprocess
 import sys

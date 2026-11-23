@@ -1,4 +1,4 @@
-"""Validated response contracts; never serialize raw ORM entities."""
+"""经过校验的响应契约，不直接序列化原始 ORM 实体。"""
 
 from pydantic import BaseModel, Field
 

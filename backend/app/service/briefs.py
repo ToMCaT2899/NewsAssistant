@@ -1,4 +1,4 @@
-"""Ownership-safe history and source-linked presentation."""
+"""按资源归属隔离历史查询，并展示关联来源。"""
 
 from sqlalchemy import select
 

@@ -1,7 +1,7 @@
-"""Validate the built Compose stack with disposable accounts, ports and named volumes.
+"""使用临时账号、端口和命名卷验证构建后的 Compose 服务。
 
-This never supplies real model/SMTP credentials and never sends mail. All resources use a random
-test project name; normal application data and other projects are not touched.
+不提供真实模型或 SMTP 凭证，也不发送邮件。所有资源使用随机测试项目名称，
+不操作正常应用数据或其他项目。
 """
 
 import json

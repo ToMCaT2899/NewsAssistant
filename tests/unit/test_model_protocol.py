@@ -1,4 +1,4 @@
-"""Protocol-level HTTP fixtures; these are not a real provider integration."""
+"""协议层 HTTP 测试夹具，不代表真实服务商集成验证。"""
 
 import json
 

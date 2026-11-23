@@ -16,7 +16,7 @@ def call(name: str, call_id: str = "one", args: str = "{}") -> dict:
 
 
 class ScriptedModel:
-    """An explicit offline test double, not evidence of live LLM reasoning."""
+    """显式的离线测试替身，不能作为真实模型推理通过的证据。"""
 
     def __init__(self, responses):
         self.responses = iter(responses)

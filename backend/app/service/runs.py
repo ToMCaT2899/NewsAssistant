@@ -1,4 +1,4 @@
-"""Idempotent task creation, claims, audit and atomic publication."""
+"""幂等任务创建、认领、审计和原子发布。"""
 
 import json
 from datetime import timedelta
@@ -146,7 +146,7 @@ def audit_tool(database: Database, run_id: str, event: dict) -> None:
             )
             or 0
         ) + 1
-        # Sequence is independent from the execution budget.
+        # 审计序号独立于执行预算计数。
         safe_args = {
             key: str(value)[:200]
             if key
@@ -198,7 +198,7 @@ def finish_run(database: Database, run_id: str, owner: str, result: dict) -> Non
 
 def publish(database: Database, run_id: str, owner: str, draft: BriefDraft, result: dict) -> str:
     with database.session.begin() as session:
-        # Acquire write ownership before reading; prevents lease recovery racing publication.
+        # 读取前先获取写锁，防止租约恢复与发布操作发生竞争。
         changed = cast(
             CursorResult,
             session.execute(

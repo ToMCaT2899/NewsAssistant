@@ -15,6 +15,7 @@
 - 所有时间以 UTC 存储，用户时区参与业务日期与调度计算。
 - 外部 I/O 设置超时，重试有上限；预算由程序强制执行。
 - 文档、SQL、配置、实现必须同步；未实现功能不得描述成可用。
+- 源码注释、文档字符串和配置说明统一使用中文，解释约束与原因；保留必要的技术名词和工具指令。
 - Python 使用类型注解，Ruff 行宽 100；TS 开启 strict，不滥用 any。
 - 检查入口：docker compose config --quiet、docker compose --profile tools build check、docker compose run --rm check。
 - SQL 改动需验证外键、唯一约束和回滚；初始化通过 docker compose run --rm db-init。
