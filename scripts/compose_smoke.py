@@ -114,13 +114,13 @@ def main() -> None:
             "-c",
             "import sqlite3; c=sqlite3.connect('/app/data/news_assistant.db'); "
             "assert c.execute('PRAGMA integrity_check').fetchone()[0]=='ok'; "
-            "assert c.execute('SELECT MAX(version) FROM schema_migrations').fetchone()[0]==2; "
+            "assert c.execute('SELECT MAX(version) FROM schema_migrations').fetchone()[0]==3; "
             "assert c.execute('SELECT persona FROM subscriptions').fetchone()[0]"
             "=='Compose persistence test'; print('Compose volume persistence verified')",
         )
         print(
             "Compose smoke passed: health, auth, subscription, missing-provider error, recreation, "
-            "and persistent schema v2. Live model/SMTP and public deployment were not tested."
+            "and persistent schema v3. Live model/SMTP and public deployment were not tested."
         )
     finally:
         subprocess.run([*prefix, "down", "--remove-orphans"], cwd=ROOT, env=env, check=False)

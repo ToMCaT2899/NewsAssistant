@@ -54,11 +54,7 @@ def runs_for(session: Session, user_id: str, limit: int, offset: int) -> list[Ru
 
 
 def brief_for_run(session: Session, run: Run) -> Brief | None:
-    return session.scalar(
-        select(Brief).where(
-            Brief.subscription_id == run.subscription_id, Brief.business_date == run.business_date
-        )
-    )
+    return session.scalar(select(Brief).where(Brief.run_id == run.id))
 
 
 def tools_for(session: Session, run_id: str, limit: int, offset: int) -> list[ToolCall]:

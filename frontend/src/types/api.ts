@@ -44,6 +44,7 @@ export interface ToolCall {
   error_code: string | null;
 }
 export interface BriefSummary {
+  edition?: number;
   id: string;
   title: string;
   overview: string;
@@ -93,4 +94,23 @@ export function formatTime(value: string | null): string {
   return value
     ? new Date(value).toLocaleString("zh-CN", { hour12: false })
     : "—";
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  created_at: string;
+}
+export type ChatAction = "chat" | "generate" | "generate_send";
+export interface ChatTurn {
+  id: string;
+  question: string;
+  answer: string | null;
+  action: ChatAction;
+  status: string;
+  error_code: string | null;
+  run_id: string | null;
+  created_at: string;
+  tools: ToolCall[];
+  brief: Brief | null;
 }

@@ -119,7 +119,9 @@ def save_subscription(
             session.execute(
                 update(Delivery)
                 .where(
-                    Delivery.brief_id.in_(brief_ids), Delivery.status.in_(["pending", "retry_wait"])
+                    Delivery.brief_id.in_(brief_ids),
+                    Delivery.status.in_(["pending", "retry_wait"]),
+                    Delivery.manual_requested == 0,
                 )
                 .values(status="cancelled", updated_at=stamp())
             )

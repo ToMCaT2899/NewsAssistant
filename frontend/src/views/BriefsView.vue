@@ -91,9 +91,10 @@ onBeforeUnmount(() => {
           :class="{ selected: selected?.id === brief.id }"
           @click="select(brief.id)"
         >
-          <time>{{ brief.business_date }}</time><strong>{{
-            brief.title
-          }}</strong
+          <time
+            >{{ brief.business_date
+            }}{{ brief.edition ? ` · 新版本 ${brief.edition}` : "" }}</time
+          ><strong>{{ brief.title }}</strong
           ><span v-if="brief.no_news">本期暂无可靠新闻</span>
         </button>
         <button v-if="more" :disabled="loading" @click="load()">
@@ -102,7 +103,12 @@ onBeforeUnmount(() => {
       </aside>
       <article v-if="selected" class="brief-paper">
         <header>
-          <time class="muted">{{ selected.business_date }}</time>
+          <time class="muted"
+            >{{ selected.business_date
+            }}{{
+              selected.edition ? ` · 新版本 ${selected.edition}` : ""
+            }}</time
+          >
           <h2>{{ selected.title }}</h2>
           <p class="overview">
             {{ selected.overview }}

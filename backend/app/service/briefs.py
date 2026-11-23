@@ -17,6 +17,7 @@ def brief_detail(database: Database, user_id: str, brief_id: str) -> dict:
                 "title",
                 "overview",
                 "business_date",
+                "edition",
                 "no_news",
                 "created_at",
                 "window_start",
@@ -78,6 +79,7 @@ def list_briefs(database: Database, user_id: str, limit: int, offset: int) -> li
                 "id": row.id,
                 "title": row.title,
                 "business_date": row.business_date,
+                "edition": row.edition,
                 "overview": row.overview,
                 "no_news": bool(row.no_news),
             }

@@ -11,7 +11,7 @@ from langgraph.graph import END, START, StateGraph
 
 from backend.app.agent.tools.registry import Registry
 from backend.app.conf.settings import Settings
-from backend.app.domain.common import AppError
+from backend.app.domain.common import AppError, identifier
 from backend.app.domain.schemas import BriefDraft
 from backend.app.infrastructure.llm import ModelClient
 
@@ -35,16 +35,21 @@ class AgentRunner:
         settings: Settings,
         validate_sources: Callable[[BriefDraft], None],
         audit: Callable[[dict], None] | None = None,
+        system_prompt: str | None = None,
+        finalize: Callable[[str], dict] | None = None,
     ) -> None:
         self.model, self.registry, self.settings = model, registry, settings
         self.validate_sources = validate_sources
         self.audit = audit or (lambda _: None)
+        self.system_prompt, self.finalize = system_prompt, finalize
 
     async def run(self, context: dict) -> AgentState:
         settings = self.settings
         deadline = time.monotonic() + settings.agent_max_seconds
         progress: AgentState = {"model_calls": 0, "tool_calls": 0}
-        system = (Path(__file__).parents[1] / "prompts/editor.txt").read_text(encoding="utf-8")
+        system = self.system_prompt or (Path(__file__).parents[1] / "prompts/editor.txt").read_text(
+            encoding="utf-8"
+        )
         system = system.replace(
             "{schema}", json.dumps(BriefDraft.model_json_schema(), ensure_ascii=False)
         )
@@ -119,6 +124,7 @@ class AgentRunner:
                 if not exceeded:
                     count += 1
                     progress["tool_calls"] = count
+                event_id = identifier()
                 started = time.monotonic()
                 name = str(call.get("function", {}).get("name", ""))
                 try:
@@ -132,6 +138,19 @@ class AgentRunner:
                     if exceeded:
                         result = {"ok": False, "error": {"code": "BUDGET_EXHAUSTED"}}
                     else:
+                        self.audit(
+                            {
+                                "event_id": event_id,
+                                "call_id": str(call.get("id", "")),
+                                "name": name,
+                                "arguments": args,
+                                "phase": "running",
+                                "ok": False,
+                                "error": None,
+                                "duration_ms": 0,
+                                "summary": "running",
+                            }
+                        )
                         result = await self.registry.invoke(
                             name,
                             args,
@@ -149,6 +168,7 @@ class AgentRunner:
                 )
                 self.audit(
                     {
+                        "event_id": event_id,
                         "sequence": count_before + 1,
                         "call_id": str(call.get("id", "")),
                         "name": name,
@@ -170,6 +190,8 @@ class AgentRunner:
 
         def validate(state: AgentState) -> dict:
             try:
+                if self.finalize:
+                    return {"result": self.finalize(state["response"].get("content") or "")}
                 draft = BriefDraft.model_validate_json(state["response"].get("content") or "")
                 self.validate_sources(draft)
                 return {"result": draft.model_dump()}

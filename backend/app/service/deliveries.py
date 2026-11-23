@@ -22,6 +22,10 @@ def render_mail(detail: dict, delivery: Delivery, settings: Settings) -> EmailMe
     message = EmailMessage()
     safe_title = " ".join(detail["title"].splitlines())
     message["Subject"] = f"[AI 日报] {detail['business_date']} {safe_title}"
+    if detail.get("edition", 0):
+        message.replace_header(
+            "Subject", str(message["Subject"]) + f"（新版本 {detail['edition']}）"
+        )
     message["From"] = formataddr((settings.smtp_from_name, settings.smtp_username))
     message["To"], message["Message-ID"] = delivery.recipient_email, delivery.message_id
     text = [detail["title"], detail["overview"]]
@@ -77,7 +81,7 @@ def claim_delivery(database: Database, owner: str, settings: Settings) -> Delive
         brief = required(session.get(Brief, row.brief_id))
         sub = required(session.get(Subscription, brief.subscription_id))
         if (
-            not sub.enabled
+            (not sub.enabled and not row.manual_requested)
             or not sub.recipient_verified_at
             or sub.recipient_email != row.recipient_email
         ):

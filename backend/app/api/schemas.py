@@ -50,6 +50,7 @@ class ToolOutput(BaseModel):
 
 
 class BriefSummary(BaseModel):
+    edition: int = 0
     id: str
     title: str
     overview: str
@@ -90,3 +91,26 @@ class BriefOutput(BriefSummary):
 class RetryOutput(BaseModel):
     id: str
     status: str
+
+
+class ChatSessionOutput(BaseModel):
+    id: str
+    title: str
+    created_at: str
+
+
+class ChatTurnTicket(BaseModel):
+    id: str
+
+
+class ChatTurnOutput(BaseModel):
+    id: str
+    question: str
+    answer: str | None
+    action: str
+    status: str
+    error_code: str | None
+    created_at: str
+    run_id: str | None
+    tools: list[ToolOutput]
+    brief: BriefOutput | None

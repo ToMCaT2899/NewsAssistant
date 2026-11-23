@@ -66,7 +66,7 @@ def test_auth_subscription_version_and_missing_model(database, settings):
         assert response.status_code == 503
         assert response.json()["error"]["code"] == "MODEL_NOT_CONFIGURED"
         assert client.get("/api/v1/runs/missing", headers=headers).status_code == 404
-        assert client.get("/ready").json()["schema_version"] == 2
+        assert client.get("/ready").json()["schema_version"] == 3
 
 
 class FeedFixture:
@@ -238,8 +238,8 @@ def test_v1_migration_keeps_existing_account(settings):
             "INSERT INTO users VALUES (?,?,?,?,?,?)",
             ("legacy", "legacy@example.com", "legacy-hash", 1, stamp(), stamp()),
         )
-    assert migrate(settings.database_url, settings.root / "database/migrations") == 2
-    assert migrate(settings.database_url, settings.root / "database/migrations") == 2
+    assert migrate(settings.database_url, settings.root / "database/migrations") == 3
+    assert migrate(settings.database_url, settings.root / "database/migrations") == 3
     db = Database(settings.database_url)
     with db.session() as session:
         assert session.get(User, "legacy").password_hash == "legacy-hash"

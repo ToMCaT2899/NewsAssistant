@@ -14,6 +14,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.app.api.schemas import (
     BriefOutput,
     BriefSummary,
+    ChatSessionOutput,
+    ChatTurnOutput,
+    ChatTurnTicket,
     RetryOutput,
     RunOutput,
     ServiceStatus,
@@ -25,6 +28,7 @@ from backend.app.conf.settings import Settings, get_settings
 from backend.app.domain.common import AppError, identifier
 from backend.app.domain.schemas import Login, RetryRequest, SubscriptionInput
 from backend.app.infrastructure.database import Database
+from backend.app.service import chat
 from backend.app.service.accounts import (
     authenticate_token,
     login,
@@ -106,7 +110,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/ready")
     def readiness() -> dict:
         version = database.schema_version()
-        if version != 2:
+        if version != 3:
             raise AppError("MIGRATION_REQUIRED", "数据库需要迁移", 503)
         return {"status": "ready", "schema_version": version}
 
@@ -187,6 +191,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/v1/deliveries/{delivery_id}/retry", response_model=RetryOutput)
     def retry(delivery_id: str, data: RetryRequest, user_id: str = Depends(current_user)) -> dict:
         return retry_delivery(database, user_id, delivery_id, data.confirm_unknown, data.reason)
+
+    @app.get("/api/v1/chat/sessions", response_model=list[ChatSessionOutput])
+    def chat_sessions(user_id: str = Depends(current_user)) -> list[dict]:
+        return chat.sessions(database, user_id)
+
+    @app.post("/api/v1/chat/sessions", status_code=201, response_model=ChatSessionOutput)
+    def open_chat(user_id: str = Depends(current_user)) -> dict:
+        return chat.new_session(database, user_id)
+
+    @app.get("/api/v1/chat/sessions/{session_id}/turns", response_model=list[ChatTurnOutput])
+    def chat_turns(session_id: str, user_id: str = Depends(current_user)) -> list[dict]:
+        return chat.turns(database, user_id, session_id)
+
+    @app.post(
+        "/api/v1/chat/sessions/{session_id}/turns", status_code=202, response_model=ChatTurnTicket
+    )
+    def send_chat(
+        session_id: str,
+        data: chat.TurnInput,
+        key: str = Header(alias="Idempotency-Key", min_length=1, max_length=100),
+        user_id: str = Depends(current_user),
+    ) -> dict:
+        return chat.start_turn(database, settings, user_id, session_id, key, data)
 
     return app
 

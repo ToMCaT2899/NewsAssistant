@@ -116,6 +116,7 @@ class Brief(Entity, Created, Base):
     subscription_id: Mapped[str] = mapped_column(ForeignKey("subscriptions.id"))
     business_date: Mapped[str] = mapped_column(String)
     run_id: Mapped[str] = mapped_column(String)
+    edition: Mapped[int] = mapped_column(Integer, default=0)
     title: Mapped[str] = mapped_column(Text)
     overview: Mapped[str] = mapped_column(Text)
     body_markdown: Mapped[str] = mapped_column(Text)
@@ -145,6 +146,7 @@ class Delivery(Entity, Created, Updated, Base):
     __tablename__ = "deliveries"
     brief_id: Mapped[str] = mapped_column(ForeignKey("briefs.id"))
     channel: Mapped[str] = mapped_column(String, default="email")
+    manual_requested: Mapped[int] = mapped_column(Integer, default=0)
     recipient_email: Mapped[str] = mapped_column(String)
     message_id: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="pending")
@@ -170,3 +172,24 @@ class DeliveryAttempt(Entity, Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[str] = mapped_column(String)
     finished_at: Mapped[str | None] = mapped_column(String)
+
+
+class ChatSession(Entity, Created, Updated, Base):
+    __tablename__ = "chat_sessions"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    title: Mapped[str] = mapped_column(String)
+
+
+class ChatTurn(Entity, Created, Updated, Base):
+    __tablename__ = "chat_turns"
+    session_id: Mapped[str] = mapped_column(ForeignKey("chat_sessions.id"))
+    idempotency_key: Mapped[str] = mapped_column(String)
+    question: Mapped[str] = mapped_column(Text)
+    action: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="queued")
+    answer: Mapped[str | None] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(String)
+    run_id: Mapped[str | None] = mapped_column(ForeignKey("runs.id"))
+    events_json: Mapped[str] = mapped_column(Text, default="[]")
+    lease_owner: Mapped[str | None] = mapped_column(String)
+    lease_expires_at: Mapped[str | None] = mapped_column(String)

@@ -137,3 +137,159 @@ test("offline display fixture: escaped article, evidence label and explicit unkn
     page.getByText("邮件状态：邮件服务器已接受", { exact: true }),
   ).toBeVisible();
 });
+
+test("聊天页动态展示工具状态并显示新版本邮件结果（离线展示夹具）", async ({
+  page,
+}, info) => {
+  await page.route("**/api/v1/status", (route) =>
+    route.fulfill({
+      json: {
+        model_configured: true,
+        mail_configured: true,
+        news_provider: "offline-display-fixture",
+      },
+    }),
+  );
+  await page.route("**/api/v1/subscription", async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    await route.fulfill({ json: { ...data, recipient_verified: true } });
+  });
+  const thread = {
+    id: "chat-fixture",
+    title: "离线对话",
+    created_at: "2026-11-23T01:00:00Z",
+  };
+  await page.route("**/api/v1/chat/sessions", (route) =>
+    route.fulfill({ json: [thread] }),
+  );
+  let stage = 0;
+  let sent = false;
+  await page.route(
+    "**/api/v1/chat/sessions/chat-fixture/turns",
+    async (route) => {
+      if (route.request().method() === "POST") {
+        expect(route.request().postDataJSON()).toEqual({
+          message: "重点关注开源工具",
+          action: "generate_send",
+        });
+        expect(route.request().headers()["idempotency-key"]).toBeTruthy();
+        sent = true;
+        await route.fulfill({ json: { id: "turn-fixture" } });
+        return;
+      }
+      if (!sent) {
+        await route.fulfill({ json: [] });
+        return;
+      }
+      stage++;
+      const done = stage >= 3;
+      await route.fulfill({
+        json: [
+          {
+            id: "turn-fixture",
+            question: "重点关注开源工具",
+            action: "generate_send",
+            status: done ? "succeeded" : "running",
+            answer: done
+              ? "<script>window.pwned=1</script>新的简报已生成。"
+              : null,
+            error_code: null,
+            run_id: "run-fixture",
+            created_at: thread.created_at,
+            tools: [
+              {
+                id: "tool-fixture",
+                sequence: 1,
+                tool_name: "fetch_article",
+                arguments: {},
+                status: done ? "succeeded" : "running",
+                duration_ms: done ? 2200 : 0,
+                error_code: null,
+              },
+            ],
+            brief: done
+              ? {
+                  id: "new-brief",
+                  title: "离线新版本样例",
+                  overview: "仅用于显示测试，不是真实新闻。",
+                  edition: 2,
+                  business_date: "2026-11-23",
+                  no_news: false,
+                  window_start: "2026-11-22T00:00:00Z",
+                  window_end: thread.created_at,
+                  items: [
+                    {
+                      headline: "开源工具测试条目",
+                      summary: "正文按文本显示",
+                      why_it_matters: "工具进度可见",
+                      sources: [
+                        {
+                          title: "测试原文",
+                          url: "https://example.com/news",
+                          source_name: "fixture",
+                          published_at: thread.created_at,
+                          evidence_level: "full_text",
+                        },
+                      ],
+                    },
+                  ],
+                  delivery: {
+                    id: "mail-fixture",
+                    status: "accepted",
+                    attempt_count: 1,
+                    last_error_code: null,
+                  },
+                }
+              : null,
+          },
+        ],
+      });
+    },
+  );
+  await signIn(page);
+  await page.getByRole("button", { name: "新闻助手", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "新闻助手", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByLabel("发送给新闻助手", { exact: true })
+    .fill("重点关注开源工具");
+  await page
+    .getByLabel("本次操作", { exact: true })
+    .selectOption("generate_send");
+  await page
+    .getByRole("button", { name: "生成并推送", exact: true })
+    .last()
+    .click();
+  await expect(page.getByText("正在调用", { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath("chat-running.png"),
+    fullPage: true,
+  });
+  await expect(page.getByText("调用完成", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "离线新版本样例" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("QQ 邮件：邮件服务器已接受", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "测试原文", exact: false }),
+  ).toHaveAttribute("href", "https://example.com/news");
+  expect(await page.evaluate(() => "pwned" in window)).toBe(false);
+  await page.screenshot({
+    path: info.outputPath("chat-desktop.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    ),
+  ).toBe(false);
+  await page.screenshot({
+    path: info.outputPath("chat-mobile.png"),
+    fullPage: true,
+  });
+});

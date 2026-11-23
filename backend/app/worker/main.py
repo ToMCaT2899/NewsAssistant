@@ -23,6 +23,7 @@ from backend.app.infrastructure.database import Database
 from backend.app.infrastructure.llm import ChatCompletionsClient, ModelClient
 from backend.app.infrastructure.qq_smtp import MailResult, QQSender
 from backend.app.models.schema import Subscription
+from backend.app.service.chat import process_chat
 from backend.app.service.deliveries import (
     claim_delivery,
     delivery_content,
@@ -113,6 +114,8 @@ async def process_run(
                     "subscription": preferences,
                     **news.available(),
                     "business_date": run.business_date,
+                    "user_instruction": snapshot.get("_instruction", ""),
+                    "regenerate": snapshot.get("_regenerate", False),
                 }
             )
         )
@@ -171,6 +174,7 @@ async def run_worker() -> None:
             recover_deliveries(database)
             schedule_due(database)
             did_work = await process_run(database, settings, owner)
+            did_work = await process_chat(database, settings, owner) or did_work
             did_work = await process_mail(database, settings, owner) or did_work
             if not did_work:
                 try:

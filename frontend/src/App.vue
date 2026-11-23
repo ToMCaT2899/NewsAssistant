@@ -6,8 +6,9 @@ import LoginView from "./views/LoginView.vue";
 import SubscriptionView from "./views/SubscriptionView.vue";
 import BriefsView from "./views/BriefsView.vue";
 import TasksView from "./views/TasksView.vue";
+import ChatView from "./views/ChatView.vue";
 
-type Tab = "briefs" | "subscription" | "tasks";
+type Tab = "briefs" | "subscription" | "tasks" | "chat";
 const loggedIn = ref(Boolean(session.get()));
 const tab = ref<Tab>("briefs");
 const busy = ref(false);
@@ -63,6 +64,12 @@ onBeforeUnmount(() => window.removeEventListener("session-expired", signOut));
       <p class="sidebar-caption">你的每日 AI 新闻助手</p>
       <nav aria-label="主导航">
         <button
+          :aria-current="tab === 'chat' ? 'page' : undefined"
+          @click="tab = 'chat'"
+        >
+          新闻助手
+        </button>
+        <button
           :aria-current="tab === 'briefs' ? 'page' : undefined"
           @click="tab = 'briefs'"
         >
@@ -112,6 +119,11 @@ onBeforeUnmount(() => window.removeEventListener("session-expired", signOut));
       <BriefsView v-if="tab === 'briefs'" /><SubscriptionView
         v-else-if="tab === 'subscription'"
         @saved="loadStatus"
+      /><ChatView
+        v-else-if="tab === 'chat'"
+        :status="status"
+        @preferences="tab = 'subscription'"
+        @briefs="tab = 'briefs'"
       /><TasksView v-else />
     </main>
   </div>

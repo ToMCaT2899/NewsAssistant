@@ -17,7 +17,8 @@ def migrate(url: str, directory: Path) -> int:
     path = database_path(url)
     path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path, timeout=30) as connection:
-        connection.execute("PRAGMA foreign_keys=ON")
+        # SQLite 重建被引用的表需暂时关闭外键执行；事务提交前统一检查全部外键。
+        connection.execute("PRAGMA foreign_keys=OFF")
         connection.execute("PRAGMA busy_timeout=30000")
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("BEGIN IMMEDIATE")
@@ -50,6 +51,7 @@ def migrate(url: str, directory: Path) -> int:
             if connection.execute("PRAGMA foreign_key_check").fetchall():
                 raise RuntimeError("Foreign key validation failed")
             connection.commit()
+            connection.execute("PRAGMA foreign_keys=ON")
             return expected
         except BaseException:
             connection.rollback()

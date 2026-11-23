@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from backend.app.conf.settings import Settings
 from backend.app.domain.common import AppError, identifier, now, parse_time, required, stamp
@@ -61,49 +62,89 @@ def create_run(
     require_model: bool = False,
     settings: Settings | None = None,
     expected_version: int | None = None,
+    regenerate: bool = False,
+    send_mail: bool = False,
+    instruction: str = "",
 ) -> dict:
     if require_model and (settings is None or not settings.model_configured):
         raise AppError("MODEL_NOT_CONFIGURED", "请先配置模型地址、名称和 API Key", 503)
     try:
         with database.session.begin() as session:
-            sub = subscription_for(session, user_id)
-            if expected_version is not None and (
-                sub.version != expected_version or not sub.enabled
-            ):
-                raise AppError("SUBSCRIPTION_CHANGED", "订阅已变更，跳过旧调度", 409)
-            current = now()
-            day = current.astimezone(ZoneInfo(sub.timezone)).date().isoformat()
-            brief = session.scalar(
-                select(Brief).where(Brief.subscription_id == sub.id, Brief.business_date == day)
+            return create_run_in_session(
+                session,
+                user_id,
+                key,
+                trigger,
+                settings,
+                expected_version,
+                regenerate,
+                send_mail,
+                instruction,
             )
-            if brief:
-                return run_view(required(session.get(Run, brief.run_id)), brief.id, True)
-            actual_key = f"daily:{day}" if trigger == "scheduled" else f"manual:{key}"
-            existing = session.scalar(
-                select(Run).where(Run.subscription_id == sub.id, Run.idempotency_key == actual_key)
-            )
-            if not existing:
-                existing = session.scalar(
-                    select(Run).where(
-                        Run.subscription_id == sub.id, Run.status.in_(["queued", "running"])
-                    )
-                )
-            if existing:
-                return run_view(existing, reused=True)
-            run = Run(
-                subscription_id=sub.id,
-                business_date=day,
-                trigger_type=trigger,
-                idempotency_key=actual_key,
-                snapshot_json=json.dumps(subscription_view(sub), ensure_ascii=False),
-                window_start=stamp(current - timedelta(hours=sub.lookback_hours)),
-                window_end=stamp(current),
-            )
-            session.add(run)
-            session.flush()
-            return run_view(run)
     except IntegrityError as exc:
         raise AppError("TASK_CONFLICT", "已有任务正在创建，请用相同幂等键重试", 409) from exc
+
+
+def create_run_in_session(
+    session: Session,
+    user_id: str,
+    key: str,
+    trigger: str = "manual",
+    settings: Settings | None = None,
+    expected_version: int | None = None,
+    regenerate: bool = False,
+    send_mail: bool = False,
+    instruction: str = "",
+) -> dict:
+    sub = subscription_for(session, user_id)
+    if expected_version is not None and (sub.version != expected_version or not sub.enabled):
+        raise AppError("SUBSCRIPTION_CHANGED", "订阅已变更，跳过旧调度", 409)
+    current = now()
+    day = current.astimezone(ZoneInfo(sub.timezone)).date().isoformat()
+    actual_key = f"daily:{day}" if trigger == "scheduled" else f"manual:{key}"
+    existing = session.scalar(
+        select(Run).where(Run.subscription_id == sub.id, Run.idempotency_key == actual_key)
+    )
+    if existing:
+        brief = brief_for_run(session, existing)
+        return run_view(existing, brief.id if brief else None, True)
+    if not regenerate:
+        brief = session.scalar(
+            select(Brief).where(
+                Brief.subscription_id == sub.id, Brief.business_date == day, Brief.edition == 0
+            )
+        )
+        if brief:
+            return run_view(required(session.get(Run, brief.run_id)), brief.id, True)
+    active = session.scalar(
+        select(Run).where(Run.subscription_id == sub.id, Run.status.in_(["queued", "running"]))
+    )
+    if active:
+        if regenerate:
+            raise AppError("TASK_CONFLICT", "已有简报正在生成，请完成后再生成新版本", 409)
+        return run_view(active, reused=True)
+    if send_mail:
+        if settings is None or not settings.mail_configured:
+            raise AppError("SMTP_NOT_CONFIGURED", "请先配置 QQ 邮件通道", 503)
+        if not sub.recipient_verified_at:
+            raise AppError("RECIPIENT_NOT_VERIFIED", "请先由管理员验证订阅中的收件邮箱", 422)
+    snapshot = subscription_view(sub) | {
+        "_regenerate": regenerate,
+        "_send_mail": send_mail,
+        "_instruction": instruction,
+    }
+    run = Run(
+        subscription_id=sub.id,
+        business_date=day,
+        trigger_type=trigger,
+        idempotency_key=actual_key,
+        snapshot_json=json.dumps(snapshot, ensure_ascii=False),
+        window_start=stamp(current - timedelta(hours=sub.lookback_hours)),
+        window_end=stamp(current),
+    )
+    session.add(run)
+    session.flush()
+    return run_view(run)
 
 
 def claim_run(database: Database, owner: str, settings: Settings) -> Run | None:
@@ -138,47 +179,60 @@ def claim_run(database: Database, owner: str, settings: Settings) -> Run | None:
 
 def audit_tool(database: Database, run_id: str, event: dict) -> None:
     with database.session.begin() as session:
-        sequence = (
-            session.scalar(
-                select(func.coalesce(func.max(ToolCall.sequence), 0)).where(
-                    ToolCall.run_id == run_id
+        row = session.get(ToolCall, event.get("event_id", ""))
+        running = event.get("phase") == "running"
+        if row is None:
+            sequence = (
+                session.scalar(
+                    select(func.coalesce(func.max(ToolCall.sequence), 0)).where(
+                        ToolCall.run_id == run_id
+                    )
                 )
-            )
-            or 0
-        ) + 1
-        # 审计序号独立于执行预算计数。
-        safe_args = {
-            key: str(value)[:200]
-            if key
-            in {"query", "source_id", "path", "dir", "keyword", "article_id", "days", "limit"}
-            else "<omitted>"
-            for key, value in event["arguments"].items()
-        }
-        session.add(
-            ToolCall(
+                or 0
+            ) + 1
+            safe_args = {
+                key: str(value)[:200]
+                if key
+                in {"query", "source_id", "path", "dir", "keyword", "article_id", "days", "limit"}
+                else "<omitted>"
+                for key, value in event["arguments"].items()
+            }
+            row = ToolCall(
+                id=event.get("event_id") or identifier(),
                 run_id=run_id,
                 sequence=sequence,
                 model_tool_call_id=event["call_id"],
                 tool_name=event["name"],
                 arguments_json=json.dumps(safe_args, ensure_ascii=False),
-                result_summary=event["summary"],
-                status="succeeded"
-                if event["ok"]
-                else "rejected"
-                if event["error"]
-                in {"PATH_DENIED", "COMMAND_DENIED", "UNKNOWN_TOOL", "INVALID_ARGUMENTS"}
-                else "failed",
-                error_code=event["error"],
-                duration_ms=event["duration_ms"],
                 started_at=stamp(),
-                finished_at=stamp(),
             )
+            session.add(row)
+        row.result_summary = event["summary"]
+        row.status = (
+            "running"
+            if running
+            else "succeeded"
+            if event["ok"]
+            else "rejected"
+            if event["error"]
+            in {"PATH_DENIED", "COMMAND_DENIED", "UNKNOWN_TOOL", "INVALID_ARGUMENTS"}
+            else "failed"
         )
+        row.error_code, row.duration_ms = event["error"], event["duration_ms"]
+        row.finished_at = None if running else stamp()
 
 
 def finish_run(database: Database, run_id: str, owner: str, result: dict) -> None:
     error = result.get("error") or "INVALID_BRIEF"
     with database.session.begin() as session:
+        row = session.get(Run, run_id)
+        if row is None or row.status != "running" or row.lease_owner != owner:
+            return
+        session.execute(
+            update(ToolCall)
+            .where(ToolCall.run_id == run_id, ToolCall.status == "running")
+            .values(status="failed", error_code="TOOL_INTERRUPTED", finished_at=stamp())
+        )
         session.execute(
             update(Run)
             .where(Run.id == run_id, Run.status == "running", Run.lease_owner == owner)
@@ -217,11 +271,29 @@ def publish(database: Database, run_id: str, owner: str, draft: BriefDraft, resu
             raise AppError("LEASE_LOST", "任务已过期，不得发布")
         run = required(session.get(Run, run_id))
         sub = required(session.get(Subscription, run.subscription_id))
-        existing = session.scalar(
-            select(Brief).where(
-                Brief.subscription_id == sub.id, Brief.business_date == run.business_date
+        snapshot = json.loads(run.snapshot_json)
+        regenerate = snapshot.get("_regenerate", False)
+        existing = (
+            session.scalar(select(Brief).where(Brief.run_id == run.id))
+            if regenerate
+            else session.scalar(
+                select(Brief).where(
+                    Brief.subscription_id == sub.id,
+                    Brief.business_date == run.business_date,
+                    Brief.edition == 0,
+                )
             )
         )
+        edition = 0
+        if regenerate:
+            edition = (
+                session.scalar(
+                    select(func.coalesce(func.max(Brief.edition), 0)).where(
+                        Brief.subscription_id == sub.id, Brief.business_date == run.business_date
+                    )
+                )
+                or 0
+            ) + 1
         if existing:
             brief_id = existing.id
         else:
@@ -229,6 +301,7 @@ def publish(database: Database, run_id: str, owner: str, draft: BriefDraft, resu
                 subscription_id=sub.id,
                 business_date=run.business_date,
                 run_id=run.id,
+                edition=edition,
                 title=draft.title,
                 overview=draft.overview,
                 body_markdown=draft.overview,
@@ -268,10 +341,17 @@ def publish(database: Database, run_id: str, owner: str, draft: BriefDraft, resu
                             evidence_level=ref.evidence_level,
                         )
                     )
-            if sub.enabled and sub.recipient_verified_at:
+            manual_mail = bool(snapshot.get("_send_mail"))
+            delivery_allowed = (
+                bool(sub.recipient_verified_at)
+                and sub.recipient_email == snapshot["recipient_email"]
+                and (manual_mail or (sub.enabled and not regenerate))
+            )
+            if delivery_allowed:
                 session.add(
                     Delivery(
                         brief_id=brief.id,
+                        manual_requested=int(manual_mail),
                         recipient_email=sub.recipient_email,
                         message_id=f"<{identifier()}@news-assistant.local>",
                         next_attempt_at=stamp(),
@@ -294,6 +374,12 @@ def publish(database: Database, run_id: str, owner: str, draft: BriefDraft, resu
 
 def recover_expired(database: Database) -> None:
     with database.session.begin() as session:
+        expired = select(Run.id).where(Run.status == "running", Run.lease_expires_at <= stamp())
+        session.execute(
+            update(ToolCall)
+            .where(ToolCall.run_id.in_(expired), ToolCall.status == "running")
+            .values(status="failed", error_code="TOOL_INTERRUPTED", finished_at=stamp())
+        )
         session.execute(
             update(Run)
             .where(Run.status == "running", Run.lease_expires_at <= stamp())

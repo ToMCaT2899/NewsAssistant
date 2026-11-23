@@ -17,6 +17,8 @@ export default [
         crypto: "readonly",
         setTimeout: "readonly",
         clearTimeout: "readonly",
+        HTMLElement: "readonly",
+        AbortController: "readonly",
       },
     },
     rules: {
