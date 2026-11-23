@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { errorMessage, request } from "../api/client";
+import { errorMessage, request, temporaryError } from "../api/client";
 import type {
   ChatAction,
   ChatSession,
@@ -18,6 +18,8 @@ const turns = ref<ChatTurn[]>([]);
 const message = ref("");
 const action = ref<ChatAction>("chat");
 const error = ref("");
+const syncIssue = ref("");
+const lastSyncedAt = ref<string | null>(null);
 const sending = ref(false);
 const subscription = ref<Subscription | null>(null);
 const transcript = ref<HTMLElement | null>(null);
@@ -48,6 +50,8 @@ const toolNames: Record<string, string> = {
   bash: "执行受限命令",
 };
 function toolStatus(status: string) {
+  if (status === "running" && syncIssue.value)
+    return "上次记录：调用中（待同步）";
   return (
     (
       {
@@ -70,13 +74,15 @@ function stopPolling() {
   controller?.abort();
   epoch++;
 }
-async function loadTurns(scroll = false) {
+async function loadTurns(scroll = false, retryAttempt = 0) {
   if (!selected.value || disposed) return;
   clearTimeout(timer);
   controller?.abort();
   const localEpoch = ++epoch;
   const id = selected.value;
   controller = new AbortController();
+  const currentController = controller;
+  const timeout = setTimeout(() => currentController.abort(), 15000);
   try {
     const data = await request<ChatTurn[]>(`/chat/sessions/${id}/turns`, {
       signal: controller.signal,
@@ -89,7 +95,8 @@ async function loadTurns(scroll = false) {
         transcript.value.clientHeight <
         100;
     turns.value = data;
-    error.value = "";
+    syncIssue.value = "";
+    lastSyncedAt.value = new Date().toISOString();
     if (scroll || nearBottom) {
       await nextTick();
       transcript.value?.scrollTo({
@@ -111,7 +118,17 @@ async function loadTurns(scroll = false) {
     }
   } catch (reason) {
     if (localEpoch !== epoch || disposed) return;
-    error.value = errorMessage(reason) + "，点击刷新对话可恢复进度。";
+    // 只重试读取进度；后台任务可能已完成，不能自动再次提交生成或发信。
+    if (temporaryError(reason) && retryAttempt < 6) {
+      syncIssue.value = `进度连接暂时中断，正在自动重连（${retryAttempt + 1}/6）。后台任务可能仍在运行或已完成，请勿重复提交。`;
+      const delay = Math.min(1200 * 2 ** retryAttempt, 8000);
+      timer = setTimeout(() => loadTurns(false, retryAttempt + 1), delay);
+    } else {
+      syncIssue.value =
+        "暂未恢复进度连接，请点击“刷新对话”。后台任务与邮件结果尚未同步，请勿重复提交。";
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 }
 async function chooseThread(id: string) {
@@ -120,11 +137,14 @@ async function chooseThread(id: string) {
   turns.value = [];
   pending.value = null;
   error.value = "";
+  syncIssue.value = "";
+  lastSyncedAt.value = null;
   if (id) await loadTurns(true);
 }
 async function send() {
   if (
     sending.value ||
+    syncIssue.value ||
     active.value ||
     (!message.value.trim() && !pending.value)
   )
@@ -165,11 +185,19 @@ async function send() {
   }
 }
 function suggest(mode: ChatAction, text: string) {
-  if (active.value || pending.value || sending.value) return;
+  if (active.value || pending.value || sending.value || syncIssue.value) return;
   action.value = mode;
   message.value = text;
 }
+function reconnect() {
+  if (selected.value && (syncIssue.value || active.value)) void loadTurns();
+}
+function visibleAgain() {
+  if (window.document.visibilityState === "visible") reconnect();
+}
 onMounted(async () => {
+  window.addEventListener("online", reconnect);
+  window.document.addEventListener("visibilitychange", visibleAgain);
   try {
     const [list, prefs] = await Promise.all([
       request<ChatSession[]>("/chat/sessions"),
@@ -186,6 +214,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   disposed = true;
   stopPolling();
+  window.removeEventListener("online", reconnect);
+  window.document.removeEventListener("visibilitychange", visibleAgain);
 });
 </script>
 
@@ -216,6 +246,12 @@ onBeforeUnmount(() => {
       </button>
     </div>
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
+    <div v-if="syncIssue" class="notice chat-sync-notice" role="status">
+      <p>{{ syncIssue }}</p>
+      <small v-if="lastSyncedAt"
+        >上次成功同步：{{ formatTime(lastSyncedAt) }}。下方为当时记录。</small
+      >
+    </div>
     <div
       ref="transcript"
       class="chat-transcript"
@@ -280,7 +316,9 @@ onBeforeUnmount(() => {
               <li
                 v-for="tool in turn.tools"
                 :key="tool.id"
-                :data-state="tool.status"
+                :data-state="
+                  syncIssue && tool.status === 'running' ? 'stale' : tool.status
+                "
               >
                 <span class="tool-dot" aria-hidden="true"></span
                 ><strong>{{
@@ -302,9 +340,11 @@ onBeforeUnmount(() => {
             role="status"
           >
             {{
-              turn.status === "queued"
-                ? "任务已排队，等待助手处理…"
-                : "正在整理资料，工具进度会自动更新…"
+              syncIssue
+                ? "进度暂未同步，正在等待恢复连接；这不代表后台任务失败。"
+                : turn.status === "queued"
+                  ? "任务已排队，等待助手处理…"
+                  : "正在整理资料，工具进度会自动更新…"
             }}
           </p>
           <p v-if="turn.status === 'failed'" class="notice error">
@@ -381,7 +421,7 @@ onBeforeUnmount(() => {
         v-model="message"
         maxlength="2000"
         rows="3"
-        :disabled="sending || active || !!pending"
+        :disabled="sending || active || !!pending || !!syncIssue"
         placeholder="例如：重点关注开源模型，帮我重新整理一份简报…"
       ></textarea>
       <div class="chat-composer-actions">
@@ -390,7 +430,7 @@ onBeforeUnmount(() => {
             id="chat-action"
             v-model="action"
             aria-label="本次操作"
-            :disabled="sending || active || !!pending"
+            :disabled="sending || active || !!pending || !!syncIssue"
           >
             <option value="chat">聊聊简报</option>
             <option value="generate">重新生成</option>
@@ -416,6 +456,7 @@ onBeforeUnmount(() => {
           class="primary"
           :disabled="
             sending ||
+            !!syncIssue ||
             active ||
             !status?.model_configured ||
             (!message.trim() && !pending) ||

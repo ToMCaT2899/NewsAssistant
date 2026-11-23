@@ -4,6 +4,29 @@ export const session = {
   set: (token: string) => window.sessionStorage.setItem(TOKEN_KEY, token),
   clear: () => window.sessionStorage.removeItem(TOKEN_KEY),
 };
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+  get temporary(): boolean {
+    return (
+      this.status === 0 ||
+      [408, 429].includes(this.status) ||
+      this.status >= 500
+    );
+  }
+}
+
+export function temporaryError(reason: unknown): boolean {
+  return reason instanceof ApiError
+    ? reason.temporary
+    : reason instanceof Error &&
+        ["AbortError", "TimeoutError", "TypeError"].includes(reason.name);
+}
 export async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -31,8 +54,9 @@ export async function request<T>(
         message = error.message;
       }
     }
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
+  if (data === null) throw new ApiError("服务器暂未返回有效数据", 502);
   return data as T;
 }
 export function errorMessage(error: unknown): string {

@@ -856,6 +856,15 @@ code {
   font-size: 14px;
   margin-top: 14px;
 }
+.chat-sync-notice {
+  background: #fff7e7;
+  border: 1px solid #e5ca8c;
+  color: #735519;
+  margin-bottom: 14px;
+}
+.chat-sync-notice p {
+  margin-bottom: 4px;
+}
 .chat-brief {
   margin-top: 18px;
   border-top: 3px solid #006d77;

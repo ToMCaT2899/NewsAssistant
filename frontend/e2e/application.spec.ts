@@ -138,7 +138,7 @@ test("offline display fixture: escaped article, evidence label and explicit unkn
   ).toBeVisible();
 });
 
-test("聊天页动态展示工具状态并显示新版本邮件结果（离线展示夹具）", async ({
+test("聊天进度遇到 502 自动恢复并显示已发送结果，不重复提交（离线展示夹具）", async ({
   page,
 }, info) => {
   await page.route("**/api/v1/status", (route) =>
@@ -164,11 +164,13 @@ test("聊天页动态展示工具状态并显示新版本邮件结果（离线�
     route.fulfill({ json: [thread] }),
   );
   let stage = 0;
+  let submitted = 0;
   let sent = false;
   await page.route(
     "**/api/v1/chat/sessions/chat-fixture/turns",
     async (route) => {
       if (route.request().method() === "POST") {
+        submitted++;
         expect(route.request().postDataJSON()).toEqual({
           message: "重点关注开源工具",
           action: "generate_send",
@@ -183,6 +185,14 @@ test("聊天页动态展示工具状态并显示新版本邮件结果（离线�
         return;
       }
       stage++;
+      if (stage === 2) {
+        await route.fulfill({
+          status: 502,
+          contentType: "text/html",
+          body: "Bad Gateway",
+        });
+        return;
+      }
       const done = stage >= 3;
       await route.fulfill({
         json: [
@@ -267,7 +277,20 @@ test("聊天页动态展示工具状态并显示新版本邮件结果（离线�
     path: info.outputPath("chat-running.png"),
     fullPage: true,
   });
+  await expect(
+    page.getByText("进度连接暂时中断", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("上次记录：调用中（待同步）", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "发送消息", exact: true }),
+  ).toBeDisabled();
   await expect(page.getByText("调用完成", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("进度连接暂时中断", { exact: false }),
+  ).toHaveCount(0);
+  expect(submitted).toBe(1);
   await expect(
     page.getByRole("heading", { name: "离线新版本样例" }),
   ).toBeVisible();
@@ -292,4 +315,89 @@ test("聊天页动态展示工具状态并显示新版本邮件结果（离线�
     path: info.outputPath("chat-mobile.png"),
     fullPage: true,
   });
+});
+
+test("连续断线达到重试上限后可手动恢复，只重试进度查询", async ({ page }) => {
+  test.setTimeout(60000);
+  const thread = {
+    id: "disconnected",
+    title: "断线恢复测试",
+    created_at: "2026-11-23T01:00:00Z",
+  };
+  await page.route("**/api/v1/chat/sessions", (route) =>
+    route.fulfill({ json: [thread] }),
+  );
+  let reads = 0;
+  let writes = 0;
+  let recovered = false;
+  await page.route(
+    "**/api/v1/chat/sessions/disconnected/turns",
+    async (route) => {
+      if (route.request().method() !== "GET") {
+        writes++;
+        await route.fulfill({ json: { id: "unexpected-write" } });
+        return;
+      }
+      reads++;
+      if (reads > 1 && !recovered) {
+        await route.fulfill({
+          status: 503,
+          contentType: "text/html",
+          body: "Unavailable",
+        });
+        return;
+      }
+      await route.fulfill({
+        json: [
+          {
+            id: "saved-turn",
+            question: "读取我的订阅",
+            action: "chat",
+            status: recovered ? "succeeded" : "running",
+            answer: recovered ? "连接已恢复，任务已完成。" : null,
+            created_at: thread.created_at,
+            error_code: null,
+            run_id: null,
+            brief: null,
+            tools: [
+              {
+                id: "read-prefs",
+                sequence: 1,
+                tool_name: "read_preferences",
+                arguments: {},
+                status: recovered ? "succeeded" : "running",
+                duration_ms: 0,
+                error_code: null,
+              },
+            ],
+          },
+        ],
+      });
+    },
+  );
+  await signIn(page);
+  await page.getByRole("button", { name: "新闻助手", exact: true }).click();
+  await expect(page.getByText("正在调用", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("暂未恢复进度连接，请点击", { exact: false }),
+  ).toBeVisible({ timeout: 50000 });
+  expect(reads).toBe(8);
+  await page.waitForTimeout(1300);
+  expect(reads).toBe(8);
+  await expect(
+    page.getByLabel("发送给新闻助手", { exact: true }),
+  ).toBeDisabled();
+  recovered = true;
+  await page.getByRole("button", { name: "刷新对话", exact: true }).click();
+  await expect(
+    page.getByText("连接已恢复，任务已完成。", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("调用完成", { exact: true })).toBeVisible();
+  await expect(
+    page.getByLabel("发送给新闻助手", { exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByText("暂未恢复进度连接，请点击", { exact: false }),
+  ).toHaveCount(0);
+  expect(writes).toBe(0);
 });
