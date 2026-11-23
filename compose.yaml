@@ -31,7 +31,7 @@ x-environment: &backend-environment
   SHELL_TOOL_ENABLED: ${SHELL_TOOL_ENABLED:-false}
   WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-30}
   LEASE_SECONDS: ${LEASE_SECONDS:-360}
-  RSS_SOURCES_JSON: '${RSS_SOURCES_JSON:-{"huggingface":"https://huggingface.co/blog/feed.xml","arxiv-ai":"https://rss.arxiv.org/rss/cs.AI"}}'
+  RSS_SOURCES_JSON: '${RSS_SOURCES_JSON:-{"huggingface":"https://huggingface.co/blog/feed.xml","arxiv-ai":"https://rss.arxiv.org/rss/cs.AI","openai":"https://openai.com/news/rss.xml","techcrunch-ai":"https://techcrunch.com/category/artificial-intelligence/feed/"}}'
 
 x-service: &backend-service
   build: *backend-build

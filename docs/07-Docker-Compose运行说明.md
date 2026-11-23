@@ -12,7 +12,9 @@ SQLite 使用文件卷，不需要 MySQL/PostgreSQL/Redis 容器。
 官方应用基础镜像缺少时构建会获取，build.pull=false 不代表禁止获取缺少的基础镜像。
 服务 pull_policy=never 防止误拉取同名应用镜像，应用需要先 build 或 docker load。
 
-真实模型和 QQ SMTP 尚未联调，不把容器健康、离线测试或 API 排队成功称为真实端到端。
+2026-11-23 已完成隔离数据库中的真实模型、新闻原文与 QQ SMTP 单次联调，用户确认收件及内容。
+结果见[真实联调记录](development/NA-LIVE-20261123-001.md)；
+容器健康、离线测试或 API 排队成功仍不能替代真实服务验收，公开部署与跨日定时运行尚未验收。
 实际命令结果见[开发执行记录](development/NA-RUN-20261122-001.md)。
 
 ## 2. 配置与启动

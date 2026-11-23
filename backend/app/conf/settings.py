@@ -1,4 +1,4 @@
-"""Environment-only application settings; secrets never enter model input."""
+"""仅从环境变量加载应用配置，密钥不得进入模型输入。"""
 
 from functools import lru_cache
 from pathlib import Path
@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     shell_tool_enabled: bool = False
     rss_sources_json: str = (
         '{"huggingface":"https://huggingface.co/blog/feed.xml",'
-        '"arxiv-ai":"https://rss.arxiv.org/rss/cs.AI"}'
+        '"arxiv-ai":"https://rss.arxiv.org/rss/cs.AI",'
+        '"openai":"https://openai.com/news/rss.xml",'
+        '"techcrunch-ai":"https://techcrunch.com/category/artificial-intelligence/feed/"}'
     )
     smtp_host: str = "smtp.qq.com"
     smtp_port: int = Field(465, ge=1, le=65535)

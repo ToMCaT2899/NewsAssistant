@@ -9,11 +9,14 @@
 简报与来源持久化、独立调度 worker、事务 outbox、QQ SMTP 适配及 Vue 阅读页面。
 已提供 v1 → v2 SQL 迁移、依赖锁文件、Docker Compose 和离线测试。
 
-模型服务和 QQ 发件凭证尚未提供，因此**未完成真实模型生成与 QQ 邮件端到端验证，
-也未公开部署**。离线模型、RSS 和 SMTP 替身仅存在于测试注入路径；
+2026-11-23 已在隔离数据库中使用真实模型、RSS 原文和 QQ SMTP 完成一次三条新闻简报投递，
+用户确认实际收件、内容和链接正常；[真实联调记录](docs/development/NA-LIVE-20261123-001.md)
+记录调用次数、SMTP 状态和检查边界。**尚未公开部署，也未通过长期每日调度验收**。
+离线模型、RSS 和 SMTP 替身仅存在于测试注入路径；
 生产缺少配置时明确报错，不生成假新闻或假发送成功。
-新闻检索当前覆盖配置的 RSS 源，不是全网搜索。arXiv 已进行一次有效空 feed 读取；
-Hugging Face 在当次探测中超时，不承诺所有来源始终可用。
+新闻检索当前覆盖配置的 RSS 源，不是全网搜索。默认包括 Hugging Face、arXiv、
+OpenAI 与 TechCrunch AI；来源可能返回空内容、近期无更新或暂时不可用。
+本次前两个源在 72 小时窗口内没有条目，补充后两个源后才生成有新闻的简报。
 
 ## Docker Compose 启动
 
@@ -110,6 +113,24 @@ npm run build
 可用宿主机已有 Chrome 执行 `uv run python scripts/browser_smoke.py`：
 自动生成隔离测试账号和数据库，验证真实本地 API 与页面；不启动 worker，不证明真实 LLM/QQ 联调。
 完整 Compose 冒烟入口与实际结果见[运行说明](docs/07-Docker-Compose运行说明.md)。
+
+真实服务验收会消耗模型额度；加 `--send-mail` 会向配置的 SMTP 发件邮箱自发自收一封。
+不启动调度，不使用日常数据库；`--require-news` 防止将空简报记为内容验收通过。
+默认 migrate 断网，因此用临时覆盖文件开启验收容器网络：
+
+```powershell
+New-Item -ItemType Directory -Force artifacts | Out-Null
+@"
+services:
+  migrate:
+    network_mode: bridge
+"@ | Set-Content -Encoding utf8 artifacts/live-compose.yaml
+docker compose build migrate
+docker compose -f compose.yaml -f artifacts/live-compose.yaml run --rm --no-deps -T migrate python -m scripts.live_acceptance --require-news --send-mail
+```
+
+SMTP `250` 仅代表服务器接收；实际入箱和内容仍须收件人核查。
+结果不确定时先查邮箱，不要反复执行此命令；每次执行是独立验收，会产生新的邮件。
 
 ## 设计与开发溯源
 
